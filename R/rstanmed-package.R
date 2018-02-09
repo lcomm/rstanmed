@@ -10,6 +10,7 @@
 #' @import stats
 #' @import Rcpp
 #' @import rstantools
+#' @import matrixStats
 #'
 #' @description stuff
 NULL
