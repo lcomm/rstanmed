@@ -1,3 +1,6 @@
+functions {
+#include /chunks/bin_bin_mediation_functions.stan
+}
 data {
   int<lower=0> N; // # obs
   int<lower=0> P_m; // # of covariates in mediator model

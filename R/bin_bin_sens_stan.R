@@ -26,3 +26,4 @@ bin_bin_sens_stan <- function(outcomes, designs, prior, ...) {
                         ... )
   return(out)
 }
+

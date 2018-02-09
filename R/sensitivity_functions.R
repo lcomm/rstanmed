@@ -208,7 +208,7 @@ make_prior <- function(alpha_mean, beta_mean, gamma_mean, prior_type) {
 #' \code{\link{return_dgp_parameters}} if not specified)
 #' @param prior_type See \code{\link{make_prior}} for details
 #' @param ... Additional parameters to be passed to bin_bin_sens_stan
-#' @return Bias and coverage for the replicate
+#' @return Stan model fit object
 #' @export
 run_sensitivity <- function(n, prior_type, params = NULL, ...) {
   
@@ -225,18 +225,34 @@ run_sensitivity <- function(n, prior_type, params = NULL, ...) {
   prior <- make_prior(alpha_mean = params$alpha, beta_mean = params$beta, 
                       gamma_mean = params$gamma, prior_type = prior_type)
   
-  # Run Stan model
+  # Run Stan model and return fit
   sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, ...)
+  return(sf)
   
-  # Calculate bias and coverage
-  alpha_res <- get_bias_coverage(sf, "alpha", params$alpha)
-  beta_res <- get_bias_coverage(sf, "beta", params$beta)
-  gamma_res <- get_bias_coverage(sf, "gamma", params$gamma)
-  res <- c(c(alpha_res$bias, beta_res$bias, gamma_res$bias),
-           c(alpha_res$coverage, beta_res$coverage, gamma_res$coverage))
+}
+
+#' Calculate bias and coverage from a mediation fit
+#' 
+#' @param stan_fit The Stan fit object (see \code{\link{run_sensitivity}})
+#' Should have parameter vectors labeled alpha, beta, and gamma
+#' @param params List of true parameter values, labeled alpha, beta, and gamma
+#' @return List of bias and coverage vectors for all parameters
+#' @export
+get_parameter_bias_coverage <- function(stan_fit, params) {
   
-  # Return bias and coverage
-  return(res)
+  labs <- c(paste0("alpha[", 1:length(params$alpha), "]"),
+            paste0("beta[",  1:length(params$beta), "]"),
+            paste0("gamma[", 1:length(params$gamma), "]"))
+  
+  alpha_res <- get_bias_coverage(stan_fit, "alpha", params$alpha)
+  beta_res  <- get_bias_coverage(stan_fit, "beta",  params$beta)
+  gamma_res <- get_bias_coverage(stan_fit, "gamma", params$gamma)
+  
+  bias <- c(alpha_res$bias, beta_res$bias, gamma_res$bias)
+  coverage <- c(alpha_res$coverage, beta_res$coverage, gamma_res$coverage)
+  names(bias) <- names(coverage) <- labs
+  
+  return(list(bias = bias, coverage = coverage))
   
 }
 

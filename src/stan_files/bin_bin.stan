@@ -6,6 +6,7 @@ data {
   int<lower=0,upper=1> y[N]; // observed outcome
   int<lower=0,upper=1> m[N]; // observed mediator
   int<lower=0,upper=1> u[N]; // observed confounder
+  int<lower=0,upper=1> u_ei; // flag for whether u is exposure-induced 
   matrix[N, P_m] x_m; // design matrix for mediator
   matrix[N, P_y] x_y; // design matrix for outcome
   matrix[N, P_u] x_u; // design matrix for u
@@ -14,10 +15,6 @@ parameters {
   vector[P_m] beta;
   vector[P_y] alpha;
   vector[P_u] gamma;
-}
-transformed parameters {
-  real alpha_u = alpha[P_y];
-  real beta_u = beta[P_m];
 }
 model {
   vector[N] lp;
@@ -28,4 +25,3 @@ model {
     target += lp[n];
   }
 }
-
