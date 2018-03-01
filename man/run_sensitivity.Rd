@@ -4,12 +4,14 @@
 \alias{run_sensitivity}
 \title{Run a single replicate of the binary-binary mediation sensitivity analysis}
 \usage{
-run_sensitivity(n, prior_type, params = NULL, ...)
+run_sensitivity(n, prior_type, u_ei, params = NULL, ...)
 }
 \arguments{
 \item{n}{Number of observations in data set}
 
 \item{prior_type}{See \code{\link{make_prior}} for details}
+
+\item{u_ei}{0/1 flag for whether U should be exposure-induced}
 
 \item{params}{List of data generating parameters (will be created by 
 \code{\link{return_dgp_parameters}} if not specified)}

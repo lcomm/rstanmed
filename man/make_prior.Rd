@@ -4,18 +4,18 @@
 \alias{make_prior}
 \title{Construct prior list based on type of sensitivity analysis}
 \usage{
-make_prior(alpha_mean, beta_mean, gamma_mean, prior_type)
+make_prior(params, prior_type, n = NULL, n_frac = 0.1)
 }
 \arguments{
-\item{alpha_mean}{Y regression parameter mean}
-
-\item{beta_mean}{M regression parameter mean}
-
-\item{gamma_mean}{U regression parameter mean}
+\item{params}{List of parameters}
 
 \item{prior_type}{Variance type: unit variance ("unit"), informative priors on
-non-identifiable parameters ("partial"), or strong prior information 
-("strict")}
+non-identifiable parameters ("partial"), strong prior information 
+("strict"), or data-driven ("dd strict") based on MLE from a simulated data set}
+
+\item{n}{Size of data set (only needed if data-driven)}
+
+\item{n_frac}{Ratio of small n to analysis data n (only needed if data-driven)}
 }
 \value{
 Named list of prior means and variance-covariance matrices

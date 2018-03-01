@@ -3,9 +3,9 @@
 \name{make_x_u}
 \alias{make_x_u}
 \title{Construct design matrix for unmeasured confounder regression model
-Note that it does not depend on A yet!}
+Can depend on A or not}
 \usage{
-make_x_u(z1, z2, a)
+make_x_u(z1, z2, a, u_ei)
 }
 \arguments{
 \item{z1}{Length-N vector for baseline confounder Z1}
@@ -13,11 +13,13 @@ make_x_u(z1, z2, a)
 \item{z2}{Length-N vector for baseline confounder Z2}
 
 \item{a}{Length-N vector for observed or hypothetical A}
+
+\item{u_ei}{0/1 flag for whether U should be exposure-induced}
 }
 \value{
 NxP design matrix for the U outcome model
 }
 \description{
 Construct design matrix for unmeasured confounder regression model
-Note that it does not depend on A yet!
+Can depend on A or not
 }

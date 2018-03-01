@@ -2,15 +2,16 @@
 % Please edit documentation in R/sensitivity_functions.R
 \name{return_dgp_parameters}
 \alias{return_dgp_parameters}
-\title{Return true DGP for binary-binary sensitivity simulations
-Note: does not have A -> U!}
+\title{Return true DGP for binary-binary sensitivity simulations}
 \usage{
-return_dgp_parameters()
+return_dgp_parameters(u_ei)
+}
+\arguments{
+\item{u_ei}{0/1 flag for whether U should be exposure-induced}
 }
 \value{
 Named list of parameter values
 }
 \description{
 Return true DGP for binary-binary sensitivity simulations
-Note: does not have A -> U!
 }
