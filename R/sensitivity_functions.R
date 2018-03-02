@@ -317,8 +317,8 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
 #' @param z2 Vector containing levels of z2 covariate to evaluate conditional NDER
 #' @return K x 1 Matrix of conditional NDERs, for each of K covariate patterns
 #' @export
-calculate_nder <- function(params, alpha = NULL, beta = NULL, gamma = NULL, u_ei = NULL,
-                           z1 = 0:1, z2 = 0:1) {
+calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NULL, 
+                           u_ei = NULL, z1 = 0:1, z2 = 0:1) {
   
   if (!is.null(params)) {
     alpha <- params$alpha
@@ -368,3 +368,25 @@ calculate_nder <- function(params, alpha = NULL, beta = NULL, gamma = NULL, u_ei
   # Return
   return(ECF1 - ECF2)
 }
+
+#' Calculate NDER from Stan sensitivity analysis fit
+#' Returns conditional on specific z1, z2 values
+#' 
+#' @param sens_res Result list with element stan_fit containing the stan fit
+#' @params \dots Parameters to pass to \code{\link{calculate_nder}}
+#' @return K x R matrix of conditional NDER values for the K covariate patterns requested
+#' from R MCMC iterations (excludes warmup)
+#' @export
+calculate_nder_stan <- function(sens_res, ...) {
+  as <- extract(sens_res$stan_fit, pars = "alpha")[["alpha"]]
+  bs <- extract(sens_res$stan_fit, pars = "beta")[["beta"]]
+  gs <- extract(sens_res$stan_fit, pars = "gamma")[["gamma"]]
+  niter <- ncol(as)
+  
+  return(sapply(1:niter, function(r) {
+    calculate_nder(params = NULL, 
+                   alpha = as[r,], beta = bs[r,], gamma = gs[r,], 
+                   ...)
+  }))
+}
+

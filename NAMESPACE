@@ -3,6 +3,8 @@
 export(bin_bin_sens_stan)
 export(bin_bin_stan)
 export(calculate_bias)
+export(calculate_nder)
+export(calculate_nder_stan)
 export(check_coverage)
 export(get_bias_coverage)
 export(get_parameter_bias_coverage)
