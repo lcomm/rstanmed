@@ -2,3 +2,17 @@
 .Rhistory
 .RData
 *.Rbuildignore
+registry/*
+src/stan_files/*.o
+src/stan_files/*.cc
+src/stan_files/*.hpp
+src/rstanmed.so
+src/rstanmed.dll
+src/init.o
+man/*.Rd
+!man/rstanmed-internal.Rd
+vignettes/*.R
+!vignettes/*.Rmd
+vignettes/*.html
+vignettes/*_files
+.DS_Store
