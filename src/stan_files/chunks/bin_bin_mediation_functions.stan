@@ -36,18 +36,18 @@
   * 
   * @param beta Length-P Vector of regression parameters from M model. Element
   * (P - 1) corresponds to A and element P corresponds to U.
-  * @param x_m NxP design matrix for M regression
+  * @param x_m Nx(P - 1) design matrix for M regression
   * @param u Length-N vector of U values (probably simulated)
   * @param a 0/1 level at which to set A
   * return Length-N vector of simulated values for M_a
   **/
   vector ma_rng(vector beta, matrix x_m, vector u, int a) {
     int N = rows(x_m);
-    int P_m = cols(x_m);
+    int P_m = cols(x_m) + 1;
     vector[N] ma;
     vector[N] lp;
-    vector[P_m] beta_zeroed = beta;
-    beta_zeroed[(P_m - 1):P_m] = rep_vector(0, 2);
+    vector[P_m - 1] beta_zeroed = beta[1:(P_m - 1)];
+    beta_zeroed[P_m - 1] = 0;
     
     lp = x_m * beta_zeroed + a * beta[P_m - 1] + u * beta[P_m];
     
@@ -75,11 +75,11 @@
   vector ya_rng(vector alpha, matrix x_y, vector m, vector u, int a, 
                 int mean_only) {
     int N = rows(x_y);
-    int P_y = cols(x_y);
+    int P_y = cols(x_y) + 1;
     vector[N] ya;
     vector[N] lp;
-    vector[P_y] alpha_zeroed = alpha;
-    alpha_zeroed[(P_y - 2):P_y] = rep_vector(0, 3);
+    vector[P_y - 1] alpha_zeroed = alpha[1:(P_y - 1)];
+    alpha_zeroed[(P_y - 2):(P_y - 1)] = rep_vector(0, 2);
     
     lp = x_y * alpha_zeroed + a * alpha[P_y - 2] + m * alpha[P_y - 1] + 
          u * alpha[P_y];
@@ -112,6 +112,7 @@
   * @param mean_only 0/1 indicator for whether expected values of the potential
   * outcomes should be returned (1) or simulated values (0)
   * @return Nx4 matrix of means or simulated values
+  * @export
   **/
   matrix quartet_rng(vector alpha, vector beta, vector gamma, int u_ei,
                      matrix x_y, matrix x_m, matrix x_u, int mean_only) {
@@ -144,3 +145,57 @@
     return quartet;
   }
   
+  /**
+  * Calculate simulation-based NDER for Y_(1, M_0) - Y_(0, M_0) from matrix block
+  * of B parameter draws
+  * 
+  * @param alpha Matrix with B rows containing regression coefficients from Y model.
+  * See \code{\link{ya_rng}} for details on coefficient order. 
+  * @param beta Matrix with B rows containing regression coefficients from M model. 
+  * See \code{\link{ma_rng}} for details on coefficient order.
+  * @param gamma Matrix with B rows containing regression coefficients from A model.
+  * See \code{\link{ua_rng}} for details on coefficient order.
+  * @param u_ei 0/1 indicator for whether U is exposure-induced. See 
+  * \code{\link{ua_rng}} for details.
+  * @param x_y Design matrix with N rows for Y regression model.
+  * @param x_m Design matrix with N rows for Y regression model.
+  * @param x_u Design matrix with N rows for U regression model.
+  * @param mean_only 0/1 indicator for whether expected values of the potential
+  * outcomes should be returned (1) or simulated values (0)
+  * @return B x N matrix of means or simulated values
+  * @export
+  **/
+  matrix sim_nder_rng(matrix alpha, matrix beta, matrix gamma, int u_ei,
+                      matrix x_y, matrix x_m, matrix x_u, int mean_only) {
+  // TODO: Fix for mean_only = FALSE case
+  // Need better bootstrap sampling approach first
+  int B = rows(alpha);
+  int N = rows(x_y);
+  matrix[cols(alpha), B] alphat = alpha';
+  matrix[cols(beta), B] betat = beta';
+  matrix[cols(gamma), B] gammat = gamma';
+  vector[N] boot_probs = rep_vector(1.0/N, N);
+  int row_i;
+  matrix[N, B] nder;
+  matrix[N, 4] quartet;
+  matrix[N, cols(x_y)] x_ynew;
+  matrix[N, cols(x_m)] x_mnew;
+  matrix[N, cols(x_u)] x_unew;
+  
+  // loop over MCMC iterations
+  for (b in 1:B) {
+    // make vector of indices for the bootstrap sample
+    for (n in 1:N) {
+      row_i = categorical_rng(boot_probs);
+      x_ynew[n,] = x_y[row_i,];
+      x_mnew[n,] = x_m[row_i,];
+      x_unew[n,] = x_u[row_i,];
+    }
+    
+    quartet = quartet_rng(alphat[,b], betat[,b], gammat[,b], u_ei,
+                          x_ynew, x_mnew, x_unew, mean_only);
+    nder[,b] = quartet[,3] - quartet[,1];
+  }
+  
+  return nder';
+  }

@@ -277,7 +277,7 @@ run_sensitivity <- function(n, prior_type, u_ei, params = NULL, ...) {
   
   # Run Stan model and return fit
   sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, ...)
-  return(list(stan_fit = sf, params = params))
+  return(list(stan_fit = sf, params = params, data_list = dl))
 }
 
 #' Calculate bias and coverage from a mediation fit
@@ -315,12 +315,19 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
 #' @param u_ei Whether U is exposure-induced (optional)
 #' @param z1 Vector containing levels of z1 covariate to evaluate conditional NDER
 #' @param z2 Vector containing levels of z2 covariate to evaluate conditional NDER
+#' @param mean Whether to average (defaults)
+#' @param weights Vector of weights for z1 and z2 combinations (optional). Default is to 
+#' give every combination equal weight
 #' @return K x 1 Matrix of conditional NDERs, for each of K covariate patterns
 #' @export
 calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NULL, 
-                           u_ei = NULL, z1 = 0:1, z2 = 0:1) {
-  
-  if (!is.null(params)) {
+                           u_ei = NULL, z1 = 0:1, z2 = 0:1, mean = FALSE, weights = NULL) {
+  if (is.null(u_ei) & is.null(params)) {
+    stop("Need to specify u_ei if not supplying params")
+  }
+    
+  if (is.null(params)) {
+    params <- return_dgp_parameters(u_ei)
     alpha <- params$alpha
     beta  <- params$beta
     gamma <- params$gamma
@@ -331,6 +338,12 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
   df <- expand.grid(z1 = z1, z2 = z2, u_for_y = 0:1, m = 0:1)
   bl_types <- make_bl_types()
   bl_types$bl_type <- 1:NROW(bl_types)
+  if (mean == TRUE & is.null(weights)) {
+    bl_types$weights <- 1/NROW(bl_types)
+  } else {
+    stopifnot(length(weights) == NROW(bl_types))
+    bl_types$weights <- weights
+  }
   df <- merge(df, bl_types, by = c("z1", "z2"))
   
   # for a = 0 world
@@ -355,25 +368,29 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
   
   # CF1 : E[Y(a = 1, u = u(a = 1), m = g(a = 0))]
   w1 <- pm_a0 * pu_for_y_a1
-  ECF1 <- sapply(unique(df$bl_type), function(type) {
+  ECF1 <- sapply(bl_types$bl_type, function(type) {
     weighted.mean(ey_cf1[df$bl_type == type], w = w1[df$bl_type == type])
   })
   
   # CF2 : E[Y(a = 0, u = u(a = 0), m = g(a = 0))]
   w2 <- pm_a0 * pu_for_y_a0
-  ECF2 <- sapply(unique(df$bl_type), function(type) {
+  ECF2 <- sapply(bl_types$bl_type, function(type) {
     weighted.mean(ey_cf2[df$bl_type == type], w = w2[df$bl_type == type])
   })
   
   # Return
-  return(ECF1 - ECF2)
+  if (mean == TRUE) {
+    return(weighted.mean(ECF1 - ECF2, w = bl_types$weights))
+  } else {
+    return(ECF1 - ECF2)
+  }
 }
 
 #' Calculate NDER from Stan sensitivity analysis fit
 #' Returns conditional on specific z1, z2 values
 #' 
 #' @param sens_res Result list with element stan_fit containing the stan fit
-#' @params \dots Parameters to pass to \code{\link{calculate_nder}}
+#' @param \dots Parameters to pass to \code{\link{calculate_nder}}
 #' @return K x R matrix of conditional NDER values for the K covariate patterns requested
 #' from R MCMC iterations (excludes warmup)
 #' @export
