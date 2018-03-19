@@ -6,19 +6,57 @@
 #' @return Length-P vector of estimated bias
 #' @export
 calculate_bias <- function(samples, truth) {
-  post_mean <- colMeans(samples)
+  if (is.vector(samples)) {
+    post_mean <- mean(samples)
+  } else {
+    post_mean <- colMeans(as.matrix(samples))
+  }
   bias <- post_mean - truth
+  return(bias)
 }
 
-#' Evaluate Y/N credible interval coverage for Stan samples
+#' Make credible interval from Stan samples
 #' 
 #' @param samples SxP Matrix with each column corresponding to a parameter
+#' @return Length-2 vector or Px2 matrix of credible interval bounds
+#' @export
+make_ci <- function(samples) {
+  if (is.vector(samples) || (length(dim(samples)) == 1)) {
+    ci <- quantile(samples, probs = c(0.025, 0.975))
+  } else {
+    ci <- matrixStats::colQuantiles(as.matrix(samples), probs = c(0.025, 0.975))  
+  }
+  names(ci) <- NULL
+  return(ci)
+}
+
+#' Function to calculate width of credible intervals
+#' 
+#' @param ci Length-2 vector or Px2
+#' @return Scalar or length-P vector of CI widths
+#' @export
+get_ci_width <- function(ci) {
+  if (is.vector(ci)) {
+    ci_width <- ci[2] - ci[1]
+  } else {
+    ci_width <- ci[,2] - ci[,1]
+  }
+  return(ci_width)
+}
+
+
+#' Evaluate Y/N credible interval coverage
+#' 
+#' @param ci Length-2 vector or Px2 matrix of CI lower and upper bounds
 #' @param truth Length-P vector of true parameter values
 #' @return Length-P logical vector of interval coverage
 #' @export
-check_coverage <- function(samples, truth) {
-  ci <- matrixStats::colQuantiles(samples, probs = c(0.025, 0.975))
-  coverage <- (ci[, 1] < truth) & (ci[, 2] > truth)
+check_coverage <- function(ci, truth) {
+  if (is.vector(ci)) {
+    coverage <- (ci[1] < truth) & (ci[2] > truth)
+  } else {
+    coverage <- (ci[, 1] < truth) & (ci[, 2] > truth)
+  }
   return(coverage)
 }
 
@@ -27,35 +65,49 @@ check_coverage <- function(samples, truth) {
 #' @param stan_fit Stan fit object
 #' @param parameter_name String name for parameter extraction
 #' @param truth True values of parameter
-#' @return Length-2 list of length-P bias vector and length-P coverage
+#' @return Length-2 list of length-P bias, coverage, and CI width
 #' @export
 get_bias_coverage <- function(stan_fit, parameter_name, truth) {
-  samples <- extract(stan_fit, pars = parameter_name)[[parameter_name]]
+  if (length(parameter_name) > 1) {
+    samples <- as.matrix(extract(stan_fit, pars = parameter_name)[[parameter_name]])
+  } else {
+    samples <- extract(stan_fit, pars = parameter_name)[[parameter_name]]  
+  }
   bias <- calculate_bias(samples, truth)
-  coverage <- check_coverage(samples, truth)
-  names(bias) <- names(coverage) <- paste0(parameter_name, 1:length(truth))
-  return(list(bias = bias, coverage = coverage))
+  ci <- make_ci(samples)
+  coverage <- check_coverage(ci, truth)
+  ci_width <- get_ci_width(ci)
+  return(list(bias = bias, coverage = coverage, ci_width = ci_width))
 }
 
 #' Return true DGP for binary-binary sensitivity simulations
 #' 
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
+#' @param am_intx 0/1 flag for including A*M interaction in outcome model
 #' @return Named list of parameter values
 #' @export
-return_dgp_parameters <- function(u_ei) {
+return_dgp_parameters <- function(u_ei, am_intx) {
   if (u_ei == 0) {
     gamma <- setNames(c(-1, 0.2, 0.4), c("(i)", "z1", "z2"))
   } else if (u_ei == 1) {
     gamma <- setNames(c(-1, 0.2, 0.4, 0.5), c("(i)", "z1", "z2", "a"))
   }
+  
+  if (am_intx == 0) {
+    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.3),
+                      c("(i)", "z1", "z2", "a", "m", "u"))
+  } else if (am_intx == 1) {
+    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.1, 0.3),
+                      c("(i)", "z1", "z2", "a", "m", "a:m", "u"))
+  }
   return(list(u_ei     = u_ei,
+              am_intx  = am_intx,
               pz1      = 0.5, 
               pz2      = 0.5, 
               gamma    = gamma,
               beta     = setNames(c(-2, 0.3, 0.2, 0.7, 0.8),
                                   c("(i)", "z1", "z2", "a", "u")),
-              alpha    = setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.3),
-                                  c("(i)", "z1", "z2", "a", "m", "u")),
+              alpha    = alpha,
               a_params = setNames(c(-1, 0.5, 0.7),
                                   c("(i)", "z1", "z2"))))
 }
@@ -118,7 +170,7 @@ make_x_m <- function(z1, z2, a, u = NULL, type = c("observed", "full")) {
   }
 }
 
-#' Construct design matrix for outcoe regression model
+#' Construct design matrix for outcome regression model
 #' 
 #' @param z1 Length-N vector for baseline confounder Z1
 #' @param z2 Length-N vector for baseline confounder Z2
@@ -127,29 +179,38 @@ make_x_m <- function(z1, z2, a, u = NULL, type = c("observed", "full")) {
 #' @param u Length-N vector for observed (true) or hypothetical U
 #' @param type Whether to make naive matrix excluding U ("observed") or 
 #' full matrix that includes U ("full")
+#' @param am_intx 0/1 Whether to include A*M interaction
 #' @return NxP design matrix for the Y outcome model
 #' @export
-make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full")) {
-  if (type == "full") {
-    return(cbind(1, z1, z2, a, m, u))
-  } else if (type == "observed") {
-    return(cbind(1, z1, z2, a, m))
+make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full"),
+                     am_intx) {
+  base <- cbind(1, z1, z2, a, m)
+  if (am_intx == 1) {
+    base <- cbind(base, a * m)
+    colnames(base)[ncol(base)] <- "a:m"
   }
+  if (type == "full") {
+    return(cbind(base, u))
+  } else if (type == "observed") {
+    return(base)
+  }
+  
 }
 
 #' Simulate data set
 #' 
 #' @param n Number of observations to simulate
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
+#' @param am_intx 0/1 flag for A*M interaction in outcome model
 #' @param params (Optional) List of data-generating parameters
 #' see \code{\link{return_dgp_parameters}} for details on structure
 #' @return List containing: df (data frame with n rows),
 #' outcomes (named list of m and y outcomes), and designs (named list of 
 #' design matrices for u, m, and y regression models)
 #' @export
-simulate_data <- function(n, u_ei, params = NULL) {
+simulate_data <- function(n, u_ei, am_intx, params = NULL) {
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei)
+    params <- return_dgp_parameters(u_ei, am_intx)
   }
   
   # Baseline and treatment
@@ -163,8 +224,8 @@ simulate_data <- function(n, u_ei, params = NULL) {
   x_m_full <- make_x_m(z1, z2, a, u, type = "full")
   x_m <- make_x_m(z1, z2, a, u, type = "observed")
   m   <- rbinom(n, size = 1, prob = plogis(x_m_full %*% params$beta))
-  x_y_full <- make_x_y(z1, z2, a, m, u, type = "full")
-  x_y <- make_x_y(z1, z2, a, m, u, type = "observed")
+  x_y_full <- make_x_y(z1, z2, a, m, u, type = "full", am_intx = params$am_intx)
+  x_y <- make_x_y(z1, z2, a, m, u, type = "observed", am_intx = params$am_intx)
   y   <- rbinom(n, size = 1, prob = plogis(x_y_full %*% params$alpha))
   
   # Return
@@ -198,11 +259,11 @@ make_prior <- function(params, prior_type, n = NULL, n_frac = 0.1) {
     }
     
     s_dl <- simulate_data(n = floor(n * n_frac), params = params)
-    fit_m <- glm(s_dl[["df"]][["m"]] ~ -1 + s_dl[["designs"]][["x_m"]] + s_dl[["df"]][["u"]], 
+    fit_m <- glm(s_dl$df$m ~ -1 + s_dl$designs$x_m + s_dl$df$u, 
                  family = binomial(link = "logit"))
-    fit_y <- glm(s_dl[["df"]][["y"]] ~ -1 + s_dl[["designs"]][["x_y"]] + s_dl[["df"]][["u"]], 
+    fit_y <- glm(s_dl$df$y ~ -1 + s_dl$designs$x_y + s_dl$df$u, 
                  family = binomial(link = "logit"))
-    fit_u <- glm(s_dl[["df"]][["u"]] ~ -1 + s_dl[["designs"]][["x_u"]], 
+    fit_u <- glm(s_dl$df$u ~ -1 + s_dl$designs$x_u, 
                  family = binomial(link = "logit"))
   }
   
@@ -232,7 +293,8 @@ make_prior <- function(params, prior_type, n = NULL, n_frac = 0.1) {
     prior[["beta"]][["vcov"]]  <- diag(P_m)
     prior[["gamma"]][["vcov"]] <- diag(P_u)
   } else if (prior_type == "partial") {
-    prior[["alpha"]][["vcov"]] <- diag(c(rep(1, P_y - 1), 0.001))
+    aa <- ifelse(params$am_intx == 1, 2, 1)
+    prior[["alpha"]][["vcov"]] <- diag(c(rep(1, P_y - aa), rep(0.001, aa)))
     prior[["beta"]][["vcov"]]  <- diag(c(rep(1, P_m - 1), 0.001))
     prior[["gamma"]][["vcov"]] <- diag(P_u) * 0.001
   } else if (prior_type == "strict") {
@@ -254,18 +316,19 @@ make_prior <- function(params, prior_type, n = NULL, n_frac = 0.1) {
 #' 
 #' @param n Number of observations in data set
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
+#' @param am_intx 0/1 flag for exposure-mediator interaction in outcome model
 #' @param params List of data generating parameters (will be created by 
 #' \code{\link{return_dgp_parameters}} if not specified)
 #' @param prior_type See \code{\link{make_prior}} for details
 #' @param ... Additional parameters to be passed to bin_bin_sens_stan
 #' @return Stan model fit object
 #' @export
-run_sensitivity <- function(n, prior_type, u_ei, params = NULL, ...) {
+run_sensitivity <- function(n, prior_type, u_ei, am_intx, params = NULL, ...) {
   
   # Basic checks
   stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei)
+    params <- return_dgp_parameters(u_ei, am_intx)
   }
   params$prior = prior_type
   
@@ -276,7 +339,7 @@ run_sensitivity <- function(n, prior_type, u_ei, params = NULL, ...) {
   prior <- make_prior(params, prior_type, n, n_frac = 0.1)
   
   # Run Stan model and return fit
-  sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, ...)
+  sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, u_ei, am_intx, ...)
   return(list(stan_fit = sf, params = params, data_list = dl))
 }
 
@@ -299,9 +362,10 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
   
   bias <- c(alpha_res$bias, beta_res$bias, gamma_res$bias)
   coverage <- c(alpha_res$coverage, beta_res$coverage, gamma_res$coverage)
-  names(bias) <- names(coverage) <- labs
+  ci_width <- c(alpha_res$ci_width, beta_res$ci_width, gamma_res$ci_width)
+  names(bias) <- names(coverage) <- names(ci_width) <- labs
   
-  return(list(bias = bias, coverage = coverage))
+  return(list(bias = bias, coverage = coverage, ci_width = ci_width))
   
 }
 
@@ -321,17 +385,19 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
 #' @return K x 1 Matrix of conditional NDERs, for each of K covariate patterns
 #' @export
 calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NULL, 
-                           u_ei = NULL, z1 = 0:1, z2 = 0:1, mean = FALSE, weights = NULL) {
+                           u_ei = NULL, am_intx = NULL, 
+                           z1 = 0:1, z2 = 0:1, mean = FALSE, weights = NULL) {
   if (is.null(u_ei) & is.null(params)) {
     stop("Need to specify u_ei if not supplying params")
   }
     
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei)
-    alpha <- params$alpha
-    beta  <- params$beta
-    gamma <- params$gamma
-    u_ei  <- params$u_ei
+    params  <- return_dgp_parameters(u_ei, am_intx)
+    alpha   <- params$alpha
+    beta    <- params$beta
+    gamma   <- params$gamma
+    u_ei    <- params$u_ei
+    am_intx <- params$am_intx
   }
   
   # Make all possible combinations for provided z1, z2
@@ -340,7 +406,7 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
   bl_types$bl_type <- 1:NROW(bl_types)
   if (mean == TRUE & is.null(weights)) {
     bl_types$weights <- 1/NROW(bl_types)
-  } else {
+  } else if (!is.null(weights)) {
     stopifnot(length(weights) == NROW(bl_types))
     bl_types$weights <- weights
   }
@@ -361,9 +427,9 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
   pu_for_y_a1 <- ifelse(df$u_for_y == 1, pu1_a1, 1 - pu1_a1)
   
   # mean y for covariate/m/u combinations
-  ey_cf1 <- plogis(make_x_y(df$z1, df$z2, a = 1, df$m, df$u_for_y, "full") 
+  ey_cf1 <- plogis(make_x_y(df$z1, df$z2, a = 1, df$m, df$u_for_y, "full", am_intx) 
                    %*% alpha)
-  ey_cf2 <- plogis(make_x_y(df$z1, df$z2, a = 0, df$m, df$u_for_y, "full") 
+  ey_cf2 <- plogis(make_x_y(df$z1, df$z2, a = 0, df$m, df$u_for_y, "full", am_intx)
                    %*% alpha)
   
   # CF1 : E[Y(a = 1, u = u(a = 1), m = g(a = 0))]
@@ -387,22 +453,26 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
 }
 
 #' Calculate NDER from Stan sensitivity analysis fit
+#' Not simulation-based!
 #' Returns conditional on specific z1, z2 values
 #' 
 #' @param sens_res Result list with element stan_fit containing the stan fit
+#' @param u_ei Whether unmeasured confounder is exposure-induced
+#' @param am_intx Whether outcome model includes exposure-mediator interaction
 #' @param \dots Parameters to pass to \code{\link{calculate_nder}}
 #' @return K x R matrix of conditional NDER values for the K covariate patterns requested
 #' from R MCMC iterations (excludes warmup)
 #' @export
-calculate_nder_stan <- function(sens_res, ...) {
+calculate_nder_stan <- function(sens_res, u_ei, am_intx, ...) {
   as <- extract(sens_res$stan_fit, pars = "alpha")[["alpha"]]
   bs <- extract(sens_res$stan_fit, pars = "beta")[["beta"]]
   gs <- extract(sens_res$stan_fit, pars = "gamma")[["gamma"]]
-  niter <- ncol(as)
+  niter <- nrow(as)
   
   return(sapply(1:niter, function(r) {
     calculate_nder(params = NULL, 
                    alpha = as[r,], beta = bs[r,], gamma = gs[r,], 
+                   u_ei = u_ei, am_intx = am_intx,
                    ...)
   }))
 }

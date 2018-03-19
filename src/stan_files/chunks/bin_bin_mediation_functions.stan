@@ -68,21 +68,28 @@
   * @param m Length-N vector of M values (probably simulated)
   * @param u Length-N vector of U values (probably simulated)
   * @param a 0/1 level at which to set A
+  * @param am_intx 0/1 indicator for exposure-mediator interaction
   * @param mean_only 0/1 indicator for whether expected values of the potential
   * outcomes should be returned (1) or simulated values (0)
   * return Length-N vector of simulated values for Y_a
   **/
   vector ya_rng(vector alpha, matrix x_y, vector m, vector u, int a, 
-                int mean_only) {
+                int am_intx, int mean_only) {
     int N = rows(x_y);
     int P_y = cols(x_y) + 1;
     vector[N] ya;
     vector[N] lp;
     vector[P_y - 1] alpha_zeroed = alpha[1:(P_y - 1)];
-    alpha_zeroed[(P_y - 2):(P_y - 1)] = rep_vector(0, 2);
     
-    lp = x_y * alpha_zeroed + a * alpha[P_y - 2] + m * alpha[P_y - 1] + 
-         u * alpha[P_y];
+    if (am_intx == 0) {
+      alpha_zeroed[(P_y - 2):(P_y - 1)] = rep_vector(0, 2);
+      lp = x_y * alpha_zeroed + a * alpha[P_y - 2] + m * alpha[P_y - 1] + 
+           u * alpha[P_y];
+    } else if (am_intx == 1) {
+      alpha_zeroed[(P_y - 3):(P_y - 1)] = rep_vector(0, 3);
+      lp = x_y * alpha_zeroed + a * alpha[P_y - 3] + m * alpha[P_y - 2] + 
+           a * m * alpha[P_y - 1] + u * alpha[P_y];
+    }
     
     if (mean_only == 1) {
       ya = inv_logit(lp);
@@ -115,7 +122,8 @@
   * @export
   **/
   matrix quartet_rng(vector alpha, vector beta, vector gamma, int u_ei,
-                     matrix x_y, matrix x_m, matrix x_u, int mean_only) {
+                     matrix x_y, matrix x_m, matrix x_u, 
+                     int am_intx, int mean_only) {
     
     int N = rows(x_y);
     vector[N] u0;
@@ -126,76 +134,79 @@
     
     // precursors
     u0 = ua_rng(gamma, x_u, 0, u_ei);
-    u1 = ua_rng(gamma, x_u, 1, u_ei);
+    if (u_ei == 1) {
+      u1 = ua_rng(gamma, x_u, 1, u_ei);
+    } else {
+      u1 = u0;
+    }
     m0 = ma_rng(beta, x_m, u0, 0);
     m1 = ma_rng(beta, x_m, u1, 1);
     
     // 0, 0
-    quartet[,1] = ya_rng(alpha, x_y, m0, u0, 0, mean_only);
+    quartet[,1] = ya_rng(alpha, x_y, m0, u0, 0, am_intx, mean_only);
     
     // 0, 1
-    quartet[,2] = ya_rng(alpha, x_y, m1, u0, 0, mean_only); // recanting witness
+    // recanting witness
+    quartet[,2] = ya_rng(alpha, x_y, m1, u0, 0, am_intx, mean_only); 
     
     // 1, 0
-    quartet[,3] = ya_rng(alpha, x_y, m0, u1, 1, mean_only); // recanting witness
+    // recanting witness
+    quartet[,3] = ya_rng(alpha, x_y, m0, u1, 1, am_intx, mean_only);
     
     // 1, 1
-    quartet[,4] = ya_rng(alpha, x_y, m1, u1, 1, mean_only);
+    quartet[,4] = ya_rng(alpha, x_y, m1, u1, 1, am_intx, mean_only);
 
     return quartet;
   }
   
-  /**
-  * Calculate simulation-based NDER for Y_(1, M_0) - Y_(0, M_0) from matrix block
-  * of B parameter draws
-  * 
-  * @param alpha Matrix with B rows containing regression coefficients from Y model.
-  * See \code{\link{ya_rng}} for details on coefficient order. 
-  * @param beta Matrix with B rows containing regression coefficients from M model. 
-  * See \code{\link{ma_rng}} for details on coefficient order.
-  * @param gamma Matrix with B rows containing regression coefficients from A model.
-  * See \code{\link{ua_rng}} for details on coefficient order.
-  * @param u_ei 0/1 indicator for whether U is exposure-induced. See 
-  * \code{\link{ua_rng}} for details.
-  * @param x_y Design matrix with N rows for Y regression model.
-  * @param x_m Design matrix with N rows for Y regression model.
-  * @param x_u Design matrix with N rows for U regression model.
-  * @param mean_only 0/1 indicator for whether expected values of the potential
-  * outcomes should be returned (1) or simulated values (0)
-  * @return B x N matrix of means or simulated values
-  * @export
-  **/
-  matrix sim_nder_rng(matrix alpha, matrix beta, matrix gamma, int u_ei,
-                      matrix x_y, matrix x_m, matrix x_u, int mean_only) {
-  // TODO: Fix for mean_only = FALSE case
-  // Need better bootstrap sampling approach first
-  int B = rows(alpha);
+  
+  // Calculate simulation-based conditional NDER (Y_(1, g=M_0) - Y_(0, g=M_0)), 
+  // NIER (Y_(1, g=M_1) - Y_(1, g=M_0)), TER (Y_(1, g=M_1) - Y_(0, g=M_0)
+  // 
+  // @param alpha Vector of regression coefficients from Y model.
+  // See \code{\link{ya_rng}} for details on coefficient order. 
+  // @param beta Vector of regression coefficients from M model. 
+  // See \code{\link{ma_rng}} for details on coefficient order.
+  // @param gamma Vector of regression coefficients from A model.
+  // See \code{\link{ua_rng}} for details on coefficient order.
+  // @param u_ei 0/1 indicator for whether U is exposure-induced. See 
+  // \code{\link{ua_rng}} for details.
+  // @param x_y Design matrix with N rows for Y regression model.
+  // @param x_m Design matrix with N rows for Y regression model.
+  // @param x_u Design matrix with N rows for U regression model.
+  // @param mean_only 0/1 indicator for whether expected values of the potential
+  // outcomes should be returned (1) or simulated values (0)
+  // @return N x 3 matrix of means or differences in simulated values. Columns
+  // are NDER, NIER, and TER, rows are for bootstrapped observations.
+  // @export
+  matrix sim_ceffects_rng(vector alpha, vector beta, vector gamma, int u_ei,
+                          matrix x_y, matrix x_m, matrix x_u, 
+                          int am_intx, int mean_only) {
+  // TODO: cleaner bootstrap
   int N = rows(x_y);
-  matrix[cols(alpha), B] alphat = alpha';
-  matrix[cols(beta), B] betat = beta';
-  matrix[cols(gamma), B] gammat = gamma';
   vector[N] boot_probs = rep_vector(1.0/N, N);
   int row_i;
-  matrix[N, B] nder;
+  matrix[N, 3] ceffects;
   matrix[N, 4] quartet;
   matrix[N, cols(x_y)] x_ynew;
   matrix[N, cols(x_m)] x_mnew;
   matrix[N, cols(x_u)] x_unew;
   
-  // loop over MCMC iterations
-  for (b in 1:B) {
-    // make vector of indices for the bootstrap sample
-    for (n in 1:N) {
-      row_i = categorical_rng(boot_probs);
-      x_ynew[n,] = x_y[row_i,];
-      x_mnew[n,] = x_m[row_i,];
-      x_unew[n,] = x_u[row_i,];
-    }
-    
-    quartet = quartet_rng(alphat[,b], betat[,b], gammat[,b], u_ei,
-                          x_ynew, x_mnew, x_unew, mean_only);
-    nder[,b] = quartet[,3] - quartet[,1];
+  // make vector of indices for the bootstrap sample
+  // make "new design matrices"
+  for (n in 1:N) {
+    row_i = categorical_rng(boot_probs);
+    x_ynew[n,] = x_y[row_i,];
+    x_mnew[n,] = x_m[row_i,];
+    x_unew[n,] = x_u[row_i,];
   }
   
-  return nder';
+  // get counterfactuals (or mean of counterfactuals)  
+  quartet = quartet_rng(alpha, beta, gamma, u_ei, x_ynew, x_mnew, x_unew, 
+                        am_intx, mean_only);
+  ceffects[,1] = quartet[,3] - quartet[,1];
+  ceffects[,2] = quartet[,4] - quartet[,3];
+  ceffects[,3] = quartet[,4] - quartet[,1];
+  
+  return ceffects;
   }

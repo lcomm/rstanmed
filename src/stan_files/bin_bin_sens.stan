@@ -1,4 +1,5 @@
 functions {
+#include /chunks/basic_functions.stan
 #include /chunks/bin_bin_mediation_functions.stan
 }
 data {
@@ -17,6 +18,9 @@ data {
   cov_matrix[P_m] prior_vcov_beta;
   cov_matrix[P_y] prior_vcov_alpha;
   cov_matrix[P_u] prior_vcov_gamma;
+  int u_ei; // whether or not u is exposure-induced
+  int am_intx; // whether there is exposure-mediator interaction
+  int mean_only; // whether to do means of final counterfactual
 } 
 parameters {
   vector[P_m] beta;
@@ -51,4 +55,10 @@ model {
     target += lp[n];
   }
 }
-
+generated quantities {
+  matrix[N, 3] ceffects;
+  vector[3] meffects;
+  ceffects = sim_ceffects_rng(alpha, beta, gamma, u_ei, x_y, x_m, x_u, 
+             am_intx, mean_only);
+  meffects = colMeans(ceffects);
+}
