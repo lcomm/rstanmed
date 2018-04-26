@@ -23,9 +23,9 @@ data {
   int mean_only; // whether to do means of final counterfactual
 } 
 transformed data {
-  matrix[P_m, K] beta_L;
-  matrix[P_y, K] alpha_L;
-  matrix[P_u, K] gamma_L;
+  matrix[P_m, P_m] beta_L;
+  matrix[P_y, P_y] alpha_L;
+  matrix[P_u, P_u] gamma_L;
   beta_L  = cholesky_decompose(prior_vcov_beta);
   alpha_L = cholesky_decompose(prior_vcov_alpha);
   gamma_L = cholesky_decompose(prior_vcov_gamma);
