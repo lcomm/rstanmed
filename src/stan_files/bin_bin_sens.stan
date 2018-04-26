@@ -22,12 +22,23 @@ data {
   int am_intx; // whether there is exposure-mediator interaction
   int mean_only; // whether to do means of final counterfactual
 } 
+transformed data {
+  matrix[P_m, K] beta_L;
+  matrix[P_y, K] alpha_L;
+  matrix[P_u, K] gamma_L;
+  beta_L  = cholesky_decompose(prior_vcov_beta);
+  alpha_L = cholesky_decompose(prior_vcov_alpha);
+  gamma_L = cholesky_decompose(prior_vcov_gamma);
+}
 parameters {
-  vector[P_m] beta;
-  vector[P_y] alpha;
-  vector[P_u] gamma;
+  vector[P_m] beta_unscaled;
+  vector[P_y] alpha_unscaled;
+  vector[P_u] gamma_unscaled;
 }
 transformed parameters {
+  vector[P_m] beta = prior_mean_beta + beta_L * beta_unscaled;
+  vector[P_y] alpha = prior_mean_alpha + alpha_L * alpha_unscaled;
+  vector[P_u] gamma = prior_mean_gamma + gamma_L * gamma_unscaled;
   vector[P_y - 1] alpha_no_u = head(alpha, P_y - 1);
   real alpha_u = alpha[P_y];
   vector[P_m - 1] beta_no_u = head(beta, P_m - 1);
@@ -40,9 +51,9 @@ model {
   real ll_if_u0;
   
   // priors
-  target += multi_normal_lpdf(alpha | prior_mean_alpha, prior_vcov_alpha);
-  target += multi_normal_lpdf(beta | prior_mean_beta, prior_vcov_beta);
-  target += multi_normal_lpdf(gamma | prior_mean_gamma, prior_vcov_gamma);
+  target += normal(beta_unscaled | 0, 1);
+  target += normal(alpha_unscaled | 0, 1);
+  target += normal(gamma_unscaled | 0, 1);
   
   // likelihood
   for (n in 1:N) {
