@@ -51,9 +51,9 @@ model {
   real ll_if_u0;
   
   // priors
-  target += normal(beta_unscaled | 0, 1);
-  target += normal(alpha_unscaled | 0, 1);
-  target += normal(gamma_unscaled | 0, 1);
+  target += normal_lpdf(beta_unscaled | 0, 1);
+  target += normal_lpdf(alpha_unscaled | 0, 1);
+  target += normal_lpdf(gamma_unscaled | 0, 1);
   
   // likelihood
   for (n in 1:N) {
