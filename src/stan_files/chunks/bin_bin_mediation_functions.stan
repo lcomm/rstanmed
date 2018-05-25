@@ -204,9 +204,9 @@
   // get counterfactuals (or mean of counterfactuals)  
   quartet = quartet_rng(alpha, beta, gamma, u_ei, x_ynew, x_mnew, x_unew, 
                         am_intx, mean_only);
-  ceffects[,1] = quartet[,3] - quartet[,1];
-  ceffects[,2] = quartet[,4] - quartet[,3];
-  ceffects[,3] = quartet[,4] - quartet[,1];
+  ceffects[,1] = quartet[,3] - quartet[,1]; // direct effect
+  ceffects[,2] = quartet[,4] - quartet[,3]; // indirect effect
+  ceffects[,3] = quartet[,4] - quartet[,1]; // total effect
   
   return ceffects;
   }

@@ -1,18 +1,27 @@
 
 #' Calculate bias of posterior mean in Stan parameter samples
 #' 
-#' @param samples SxP Matrix with each column corresponding to a parameter
+#' @param estimat Length-P vector with each column corresponding to an estimate
 #' @param truth Length-P vector of true parameter values
 #' @return Length-P vector of estimated bias
 #' @export
-calculate_bias <- function(samples, truth) {
+calculate_bias <- function(estimate, truth) {
+  bias <- estimate - truth
+  return(bias)
+}
+
+#' Calculate posterior mean in Stan parameter samples
+#' 
+#' @param samples SxP Matrix with each column corresponding to a parameter
+#' @return Length-P vector of posterior means
+#' @export
+calculate_post_mean <- function(samples) {
   if (is.vector(samples)) {
     post_mean <- mean(samples)
   } else {
     post_mean <- colMeans(as.matrix(samples))
   }
-  bias <- post_mean - truth
-  return(bias)
+  return(post_mean)
 }
 
 #' Make credible interval from Stan samples
@@ -66,38 +75,95 @@ check_coverage <- function(ci, truth) {
 #' @param parameter_name String name for parameter extraction
 #' @param truth True values of parameter
 #' @return Length-2 list of length-P bias, coverage, and CI width
+#' export
+# get_bias_coverage <- function(stan_fit, parameter_name, truth) {
+#   if (length(parameter_name) > 1) {
+#     samples <- as.matrix(extract(stan_fit, pars = parameter_name)[[parameter_name]])
+#   } else {
+#     samples <- extract(stan_fit, pars = parameter_name)[[parameter_name]]  
+#   }
+#   estimate <- calculate_post_mean(samples)
+#   bias <- calculate_bias(estimate, truth)
+#   ci <- make_ci(samples)
+#   coverage <- check_coverage(ci, truth)
+#   ci_width <- get_ci_width(ci)
+#   if (is.vector(ci)) {
+#     stopifnot(length(ci) == 2)
+#     ci <- as.matrix(ci, ncol = 2)
+#   }
+#   return(list(truth = truth, estimate = estimate, bias = bias, 
+#               coverage = coverage, ci_lb = ci[,1], ci_ub = ci[,2],
+#               ci_width = ci_width))
+# }
+
+
+#' Calculate bias from a stan fit
+#' 
+#' @param stan_fit Stan model fit object.
+#' @param pars Parameter names. See \code{\link[rstan]{extract}} for parsing details.
+#' @param truth True values for parameters.
+#' @return Vector of bias values.
 #' @export
-get_bias_coverage <- function(stan_fit, parameter_name, truth) {
-  if (length(parameter_name) > 1) {
-    samples <- as.matrix(extract(stan_fit, pars = parameter_name)[[parameter_name]])
-  } else {
-    samples <- extract(stan_fit, pars = parameter_name)[[parameter_name]]  
-  }
-  bias <- calculate_bias(samples, truth)
-  ci <- make_ci(samples)
-  coverage <- check_coverage(ci, truth)
-  ci_width <- get_ci_width(ci)
-  return(list(bias = bias, coverage = coverage, ci_width = ci_width))
+get_bias_stan <- function(stan_fit, pars, truth) {
+  estimate <- summary(stan_fit, pars = pars)$summary[, "mean"]
+  stopifnot(length(truth) == length(estimate))
+  return(estimate - truth)
+}
+
+#' Calculate 95% credible interval coverage from a stan fit
+#' 
+#' @param stan_fit Stan model fit object.
+#' @param pars Parameter name(s). See \code{\link[rstan]{extract}} for parsing details.
+#' @param truth True values for parameter(s).
+#' @return Vector of logical(s) indicating whether credible interval(s) cover truth.
+#' @export
+get_ci_coverage_stan <- function(stan_fit, pars, truth) {
+  s <- summary(stan_fit, pars = pars)$summary[, c("2.5%", "97.5%")]
+  ci <- matrix(unname(s), ncol = 2)
+  stopifnot(length(truth) == nrow(ci))
+  covers <- (truth > ci[, 1]) & (truth < ci[, 2])
+  return(covers)
+}
+
+#' Calculate 95% credible interval coverage from a stan fit
+#' 
+#' @param stan_fit Stan model fit object.
+#' @param pars Parameter name(s). See \code{\link[rstan]{extract}} for parsing details.
+#' @param truth True values for parameter(s).
+#' @return Vector of credible interval width(s).
+#' @export
+get_ci_width_stan <- function(stan_fit, pars) {
+  s <- summary(stan_fit, pars = pars)$summary[, c("2.5%", "97.5%")]
+  ci <- matrix(unname(s), ncol = 2)
+  width <- ci[, 2] - ci[, 1]
+  return(width)
 }
 
 #' Return true DGP for binary-binary sensitivity simulations
 #' 
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
 #' @param am_intx 0/1 flag for including A*M interaction in outcome model
+#' @param yu_strength Strength of U -> Y relationship on log-odds scale
+#' @param mu_strength Strength of U -> M relationship on log-odds scale
 #' @return Named list of parameter values
 #' @export
-return_dgp_parameters <- function(u_ei, am_intx) {
+return_dgp_parameters <- function(u_ei, am_intx, yu_strength, mu_strength) {
+  stopifnot(c(u_ei, am_intx) %in% 0:1, is.numeric(c(yu_strength, mu_strength)))
+  
+  yu_strength <- unname(as.numeric(yu_strength))
+  mu_strength <- unname(as.numeric(mu_strength))
+  
   if (u_ei == 0) {
-    gamma <- setNames(c(-1, 0.2, 0.4), c("(i)", "z1", "z2"))
+    gamma <- setNames(c(-0.2, 0.2, 0.4), c("(i)", "z1", "z2"))
   } else if (u_ei == 1) {
-    gamma <- setNames(c(-1, 0.2, 0.4, 0.5), c("(i)", "z1", "z2", "a"))
+    gamma <- setNames(c(-0.2, 0.2, 0.4, 0.5), c("(i)", "z1", "z2", "a"))
   }
   
   if (am_intx == 0) {
-    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.3),
+    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, yu_strength),
                       c("(i)", "z1", "z2", "a", "m", "u"))
   } else if (am_intx == 1) {
-    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.1, 0.3),
+    alpha <- setNames(c(-3, 0.3, 0.2, 1, 0.8, 0.1, yu_strength),
                       c("(i)", "z1", "z2", "a", "m", "a:m", "u"))
   }
   return(list(u_ei     = u_ei,
@@ -105,10 +171,10 @@ return_dgp_parameters <- function(u_ei, am_intx) {
               pz1      = 0.5, 
               pz2      = 0.5, 
               gamma    = gamma,
-              beta     = setNames(c(-2, 0.3, 0.2, 0.7, 0.8),
+              beta     = setNames(c(-1, 0.3, 0.2, 0.7, mu_strength),
                                   c("(i)", "z1", "z2", "a", "u")),
               alpha    = alpha,
-              a_params = setNames(c(-1, 0.5, 0.7),
+              a_params = setNames(c(-0.2, 0.5, 0.7),
                                   c("(i)", "z1", "z2"))))
 }
 
@@ -146,9 +212,9 @@ make_bl_weights <- function(bl_types, pz1, pz2) {
 #' @export
 make_x_u <- function(z1, z2, a, u_ei) {
   if (u_ei == 1) {
-    return(cbind(1, z1, z2, a))
+    return(cbind(`(i)` = 1, z1, z2, a))
   } else if (u_ei == 0) {
-    return(cbind(1, z1, z2))
+    return(cbind(`(i)` = 1, z1, z2))
   }
 }
 
@@ -164,9 +230,9 @@ make_x_u <- function(z1, z2, a, u_ei) {
 #' @export
 make_x_m <- function(z1, z2, a, u = NULL, type = c("observed", "full")) {
   if (type == "full") {
-    return(cbind(1, z1, z2, a, u))
+    return(cbind(`(i)` = 1, z1, z2, a, u))
   } else if (type == "observed") {
-    return(cbind(1, z1, z2, a))
+    return(cbind(`(i)` = 1, z1, z2, a))
   }
 }
 
@@ -184,7 +250,7 @@ make_x_m <- function(z1, z2, a, u = NULL, type = c("observed", "full")) {
 #' @export
 make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full"),
                      am_intx) {
-  base <- cbind(1, z1, z2, a, m)
+  base <- cbind(`(i)` = 1, z1, z2, a, m)
   if (am_intx == 1) {
     base <- cbind(base, a * m)
     colnames(base)[ncol(base)] <- "a:m"
@@ -210,12 +276,13 @@ make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full"),
 #' @export
 simulate_data <- function(n, u_ei, am_intx, params = NULL) {
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei, am_intx)
+    params <- return_dgp_parameters(u_ei = 1, am_intx = 1)
   }
   
   # Baseline and treatment
-  z1  <- rbinom(n, size = 1, prob = params$pz1)
-  z2  <- rbinom(n, size = 1, prob = params$pz2)
+  # Center baseline covariates at true prevalence
+  z1  <- rbinom(n, size = 1, prob = params$pz1) - params$pz1
+  z2  <- rbinom(n, size = 1, prob = params$pz2) - params$pz2
   a   <- rbinom(n, size = 1, prob = plogis(cbind(1, z1, z2) %*% params$a_params))
   
   # Regression model data simulation
@@ -234,77 +301,161 @@ simulate_data <- function(n, u_ei, am_intx, params = NULL) {
               designs = list(x_u = x_u, x_m = x_m, x_y = x_y)))
 }
 
+#' Make template for prior distribution list
+#' @return Empty list with correct naming structure
+make_prior_shell <- function() {
+  prior <- list()
+  prior[["gamma"]] <- prior[["beta"]] <- prior[["alpha"]] <- 
+    list(mean = NA, vcov = NA)
+  return(prior)
+}
+
+#' Make binary-binary data driven prior based on simulated or real external data
+#' 
+#' Make a list of prior mean and variance-covariance matrices using an external
+#' data source. Assumes binary mediator and binary outcome (for now).
+#' 
+#' @param small_data Data list with data set on which to base prior information 
+#' (see \code{\link{simulate_data}} for format)
+#' @param partial_vague Whether or not to inflate prior variance for more 
+#' identified parameters
+#' @param inflate_factor Variance inflation factor (only used if 
+#' partial_vague = TRUE)
+#' @return Named list with prior means and variances
+#' @export
+make_dd_prior <- function(small_data, partial_vague, inflate_factor = NULL) {
+  
+  #Fit maximum likelihood models to small data set
+  fit_m <- glm(small_data$df$m ~ -1 + small_data$designs$x_m + small_data$df$u, 
+               family = binomial(link = "logit"))
+  fit_y <- glm(small_data$df$y ~ -1 + small_data$designs$x_y + small_data$df$u, 
+               family = binomial(link = "logit"))
+  fit_u <- glm(small_data$df$u ~ -1 + small_data$designs$x_u, 
+               family = binomial(link = "logit"))
+  
+  # Set prior means and extract covariance matrices
+  prior <- make_prior_shell()
+  prior[["alpha"]][["mean"]] <- unname(coef(fit_y))
+  prior[["beta"]][["mean"]]  <- unname(coef(fit_m))
+  prior[["gamma"]][["mean"]] <- unname(coef(fit_u))
+  a_vcov <- unname(vcov(fit_y))
+  b_vcov <- unname(vcov(fit_m))
+  g_vcov <- unname(vcov(fit_u))
+  
+  if (partial_vague) {
+    # Inflate all variances and covariances by inflate_factor,
+    # EXCEPT u-related parameters, which are all in last column
+    # (and obviously gamma is u-related)
+    sd_inflate <- sqrt(inflate_factor)
+    a_vcov <- a_vcov * inflate_factor
+    a_vcov[, ncol(a_vcov)] <- a_vcov[, ncol(a_vcov)] / sd_inflate
+    a_vcov[nrow(a_vcov), ] <- a_vcov[nrow(a_vcov), ] / sd_inflate
+    
+    b_vcov <- b_vcov * inflate_factor
+    b_vcov[, ncol(b_vcov)] <- b_vcov[, ncol(b_vcov)] / sd_inflate
+    b_vcov[nrow(b_vcov), ] <- b_vcov[nrow(b_vcov), ] / sd_inflate
+  }
+  
+  # Set prior covariance matrices
+  prior[["alpha"]][["vcov"]] <- a_vcov
+  prior[["beta"]][["vcov"]]  <- b_vcov
+  prior[["gamma"]][["vcov"]] <- g_vcov
+  
+  # Apply names
+  names(prior[["alpha"]][["mean"]]) <- colnames(small_data$designs$x_y)
+  names(prior[["beta"]][["mean"]])  <- colnames(small_data$designs$x_m)
+  names(prior[["gamma"]][["mean"]]) <- colnames(small_data$designs$x_u)
+  
+  return(prior)
+}
+
 #' Construct prior list based on type of sensitivity analysis
 #' 
 #' @param params List of parameters
-#' @param prior_type Variance type: unit variance ("unit"), informative priors on
-#' non-identifiable parameters ("partial"), strong prior information 
-#' ("strict"), or data-driven ("dd strict") based on MLE from a simulated data set
-#' @param n Size of data set (only needed if data-driven)
-#' @param n_frac Ratio of small n to analysis data n (only needed if data-driven)
+#' @param prior_type Variance type: unit variance ("unit"), informative priors 
+#' on non-identifiable parameters ("partial"), strong prior information 
+#' ("strict"), or data-driven ("dd") based on external or simulated data set
+#' @param dd_control Named list of data-driven options. If external data is to
+#' be used, "small_data" needs to be formatted as output from 
+#' \code{\link{simulate_data}}. If secondary data source is to be simulated, 
+#' need a list of parameters as from \code{\link{return_dgp_parameters}}. 
 #' @return Named list of prior means and variance-covariance matrices
 #' @export
-make_prior <- function(params, prior_type, n = NULL, n_frac = 0.1) {
-  
-  # Parse
+make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd"),
+                       dd_control = NULL) {
+
   stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
+  
   if (prior_type %in% c("unit", "partial", "strict")) {
+    if (is.null(params)) {
+      stop("Need to supply underlying parameters for this prior_type")
+    }
     P_y <- length(params$alpha)
     P_m <- length(params$beta)
     P_u <- length(params$gamma)
-  } else if (prior_type == "dd") {
     
-    if (is.null(n) | is.null(n_frac)) {
-      stop("Need to specify sample size fraction for simulated external data")
-    }
+    # Initialize container
+    prior <- make_prior_shell()
     
-    s_dl <- simulate_data(n = floor(n * n_frac), params = params)
-    fit_m <- glm(s_dl$df$m ~ -1 + s_dl$designs$x_m + s_dl$df$u, 
-                 family = binomial(link = "logit"))
-    fit_y <- glm(s_dl$df$y ~ -1 + s_dl$designs$x_y + s_dl$df$u, 
-                 family = binomial(link = "logit"))
-    fit_u <- glm(s_dl$df$u ~ -1 + s_dl$designs$x_u, 
-                 family = binomial(link = "logit"))
-  }
-  
-  
-  # Initialize container
-  prior <- list()
-  prior[["gamma"]] <- prior[["beta"]] <- prior[["alpha"]] <- list(mean = NA, vcov = NA)
-  
-  # Set prior means
-  if (prior_type %in% c("unit", "partial", "strict")) {
+    # Set prior means to be truth
     prior[["alpha"]][["mean"]] <- params$alpha
     prior[["beta"]][["mean"]]  <- params$beta
     prior[["gamma"]][["mean"]] <- params$gamma
+    
+    # Set prior variances according to specification
+    if (prior_type == "unit") {
+      prior[["alpha"]][["vcov"]] <- diag(P_y)
+      prior[["beta"]][["vcov"]]  <- diag(P_m)
+      prior[["gamma"]][["vcov"]] <- diag(P_u)
+    } else if (prior_type == "partial") {
+      aa <- ifelse(params$am_intx == 1, 2, 1)
+      prior[["alpha"]][["vcov"]] <- diag(c(rep(1, P_y - aa), rep(0.001, aa)))
+      prior[["beta"]][["vcov"]]  <- diag(c(rep(1, P_m - 1), 0.001))
+      prior[["gamma"]][["vcov"]] <- diag(P_u) * 0.001
+    } else if (prior_type == "strict") {
+      prior[["alpha"]][["vcov"]] <- diag(P_y) * 0.001
+      prior[["beta"]][["vcov"]]  <- diag(P_m) * 0.001
+      prior[["gamma"]][["vcov"]] <- diag(P_u) * 0.001
+    }
+    
+    # Apply names
+    names(prior[["alpha"]][["mean"]]) <- names(params$alpha)
+    names(prior[["beta"]][["mean"]])  <- names(params$beta)
+    names(prior[["gamma"]][["mean"]]) <- names(params$gamma)
+    
   } else if (prior_type == "dd") {
-    prior[["alpha"]][["mean"]] <- unname(coef(fit_y))
-    prior[["beta"]][["mean"]]  <- unname(coef(fit_m))
-    prior[["gamma"]][["mean"]] <- unname(coef(fit_u))
-  }
-  
-  names(prior[["alpha"]][["mean"]]) <- names(params$alpha)
-  names(prior[["beta"]][["mean"]])  <- names(params$beta)
-  names(prior[["gamma"]][["mean"]]) <- names(params$gamma)
-  
-  # Set prior variances
-  if (prior_type == "unit") {
-    prior[["alpha"]][["vcov"]] <- diag(P_y)
-    prior[["beta"]][["vcov"]]  <- diag(P_m)
-    prior[["gamma"]][["vcov"]] <- diag(P_u)
-  } else if (prior_type == "partial") {
-    aa <- ifelse(params$am_intx == 1, 2, 1)
-    prior[["alpha"]][["vcov"]] <- diag(c(rep(1, P_y - aa), rep(0.001, aa)))
-    prior[["beta"]][["vcov"]]  <- diag(c(rep(1, P_m - 1), 0.001))
-    prior[["gamma"]][["vcov"]] <- diag(P_u) * 0.001
-  } else if (prior_type == "strict") {
-    prior[["alpha"]][["vcov"]] <- diag(P_y) * 0.001
-    prior[["beta"]][["vcov"]]  <- diag(P_m) * 0.001
-    prior[["gamma"]][["vcov"]] <- diag(P_u) * 0.001
-  } else if (prior_type == "dd") {
-    prior[["alpha"]][["vcov"]] <- unname(vcov(fit_y))
-    prior[["beta"]][["vcov"]]  <- unname(vcov(fit_m))
-    prior[["gamma"]][["vcov"]] <- unname(vcov(fit_u))
+    
+    if (is.null(dd_control)) {
+      stop("Need to specify input data set or simulation parameters for dd")
+    } else {
+      
+      # Basic option checks
+      valid_options <- c("params", "small_n", "small_data", 
+                         "partial_vague", "inflate_factor")
+      opts_given <- names(dd_control)
+      stopifnot(opts_given %in% valid_options)
+      if (c("params", "small_n") %in% opts_given &&
+          !("small_data" %in% opts_given)) {
+        dd_control$small_data <- simulate_data(n = dd_control$small_n, 
+                                               params = dd_control$params)
+      } else if (!("small_data" %in% opts_given)) {
+        stop("Need to specify input data set or simulation parameters for dd")
+      } else {
+        stop("Can only specify small_data OR params and small_n")
+      }
+      
+      # Defaults
+      if (is.null(dd_control$partial_vague)) {
+        dd_control$partial_vague <- TRUE
+      } 
+      if (is.null(dd_control$inflate_factor)) {
+        dd_control$inflate_factor <- 100
+      }
+      
+      prior <- make_dd_prior(small_data = dd_control$small_data, 
+                             partial_vague = dd_control$partial_vague,
+                             inflate_factor = dd_control$inflate_factor)
+    }
   }
   
   # Return
@@ -317,44 +468,82 @@ make_prior <- function(params, prior_type, n = NULL, n_frac = 0.1) {
 #' @param n Number of observations in data set
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
 #' @param am_intx 0/1 flag for exposure-mediator interaction in outcome model
-#' @param params List of data generating parameters (will be created by 
-#' \code{\link{return_dgp_parameters}} if not specified)
+#' @param yu_strength Log-OR of U in outcome model
+#' @param mu_strength Log-OR of U in mediator model
+#' @param params List of data generating parameters for big data set (will be 
+#' created by \code{\link{return_dgp_parameters}} if not specified)
+#' @param small_yu_strength Log-OR of U in outcome model for small data
+#' @param small_mu_strength Log-OR of U in mediator model for small data
+#' @param small_params List of data generating parameters for small data set 
+#' (will be created by \code{\link{return_dgp_parameters}} if not specified)
 #' @param prior_type See \code{\link{make_prior}} for details
+#' @param result_type Whether to return full object ("raw") or only bias,
+#' coverage and width of NDER
 #' @param ... Additional parameters to be passed to bin_bin_sens_stan
 #' @return Stan model fit object
 #' @export
-run_sensitivity <- function(n, prior_type, u_ei, am_intx, params = NULL, ...) {
+run_bdf_replicate <- function(n, prior_type, u_ei, am_intx, 
+                              yu_strength, mu_strength, params = NULL,
+                              small_yu_strength, small_mu_strength, 
+                              small_params = NULL, dd_control = NULL,
+                              result_type = c("raw", "processed"),
+                              ...) {
   
   # Basic checks
   stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei, am_intx)
+    params <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
   }
   params$prior = prior_type
+  
+  if (is.null(small_params)) {
+    small_params <- return_dgp_parameters(u_ei, am_intx, 
+                                          small_yu_strength, small_mu_strength)
+  }
   
   # Simulate data
   dl <- simulate_data(n = n, params = params)
   
   # Prior 
-  prior <- make_prior(params, prior_type, n, n_frac = 0.1)
+  prior <- make_prior(params = small_params, prior_type = "dd",
+                      dd_control = list(small_n = floor(n/10), 
+                                        params = small_params,
+                                        partial_vague = TRUE,
+                                        inflate_factor = 10))
   
   # Run Stan model and return fit
   sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, u_ei, am_intx, ...)
-  return(list(stan_fit = sf, params = params, data_list = dl))
+  res <- list(stan_fit = sf, params = params, data_list = dl)
+  truth_nder <- calculate_nder(u_ei = params$u_ei,
+                               am_intx = params$am_intx,
+                               yu_strength = params$alpha["u"],
+                               mu_strength = params$beta["u"],
+                               mean = TRUE)
+  bias <- get_bias_stan(res$stan_fit, "meffects[1]", truth_nder)
+  coverage <- get_ci_coverage_stan(res$stan_fit, "meffects[1]", truth_nder)
+  width <- get_ci_width_stan(res$stan_fit, "meffects[1]")
+  
+  if (result_type == "raw") {
+    return(list(stan_fit = sf, params = params, data_list = dl,
+                bias = bias, coverage = coverage, width = width))  
+  } else {
+    return(list(bias = bias, coverage = coverage, width = width))
+  }
+  
 }
 
-#' Calculate bias and coverage from a mediation fit
+#' Calculate parameter bias and coverage from a mediation fit
 #' 
-#' @param stan_fit The Stan fit object (see \code{\link{run_sensitivity}})
+#' @param stan_fit The Stan fit object (see \code{\link{run_bdf_replicate}})
 #' Should have parameter vectors labeled alpha, beta, and gamma
 #' @param params List of true parameter values, labeled alpha, beta, and gamma
 #' @return List of bias and coverage vectors for all parameters
 #' @export
 get_parameter_bias_coverage <- function(stan_fit, params) {
   
-  labs <- c(paste0("alpha[", 1:length(params$alpha), "]"),
-            paste0("beta[",  1:length(params$beta), "]"),
-            paste0("gamma[", 1:length(params$gamma), "]"))
+  labels <- c(paste0("alpha[", 1:length(params$alpha), "]"),
+              paste0("beta[",  1:length(params$beta), "]"),
+              paste0("gamma[", 1:length(params$gamma), "]"))
   
   alpha_res <- get_bias_coverage(stan_fit, "alpha", params$alpha)
   beta_res  <- get_bias_coverage(stan_fit, "beta",  params$beta)
@@ -363,7 +552,7 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
   bias <- c(alpha_res$bias, beta_res$bias, gamma_res$bias)
   coverage <- c(alpha_res$coverage, beta_res$coverage, gamma_res$coverage)
   ci_width <- c(alpha_res$ci_width, beta_res$ci_width, gamma_res$ci_width)
-  names(bias) <- names(coverage) <- names(ci_width) <- labs
+  names(bias) <- names(coverage) <- names(ci_width) <- labels
   
   return(list(bias = bias, coverage = coverage, ci_width = ci_width))
   
@@ -377,6 +566,9 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
 #' @param beta Vector of M regression coefficients (optional) 
 #' @param gamma Vector of U regression coefficients (optional)
 #' @param u_ei Whether U is exposure-induced (optional)
+#' @param am_intx Whether exposure-M interaction in outcome (optional)
+#' @param yu_strength U coefficient in Y regression (optional)
+#' @param mu_strength U coefficient in M regression (optional)
 #' @param z1 Vector containing levels of z1 covariate to evaluate conditional NDER
 #' @param z2 Vector containing levels of z2 covariate to evaluate conditional NDER
 #' @param mean Whether to average (defaults)
@@ -384,15 +576,20 @@ get_parameter_bias_coverage <- function(stan_fit, params) {
 #' give every combination equal weight
 #' @return K x 1 Matrix of conditional NDERs, for each of K covariate patterns
 #' @export
-calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NULL, 
+calculate_nder <- function(params = NULL, 
+                           alpha = NULL, beta = NULL, gamma = NULL, 
                            u_ei = NULL, am_intx = NULL, 
+                           yu_strength = NULL, mu_strength = NULL,
                            z1 = 0:1, z2 = 0:1, mean = FALSE, weights = NULL) {
-  if (is.null(u_ei) & is.null(params)) {
-    stop("Need to specify u_ei if not supplying params")
+  
+  if ((is.null(u_ei) | is.null(am_intx) | is.null(yu_strength) | 
+       is.null(mu_strength)) & (is.null(params))) {
+    stop("Need to specify u_ei, am_intx, yu_strength, and mu_strength if not 
+         supplying params")
   }
-    
+  
   if (is.null(params)) {
-    params  <- return_dgp_parameters(u_ei, am_intx)
+    params  <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
     alpha   <- params$alpha
     beta    <- params$beta
     gamma   <- params$gamma
@@ -463,7 +660,8 @@ calculate_nder <- function(params = NULL, alpha = NULL, beta = NULL, gamma = NUL
 #' @return K x R matrix of conditional NDER values for the K covariate patterns requested
 #' from R MCMC iterations (excludes warmup)
 #' @export
-calculate_nder_stan <- function(sens_res, u_ei, am_intx, ...) {
+calculate_nder_stan <- function(sens_res, u_ei, am_intx, 
+                                yu_strength, mu_strength, ...) {
   as <- extract(sens_res$stan_fit, pars = "alpha")[["alpha"]]
   bs <- extract(sens_res$stan_fit, pars = "beta")[["beta"]]
   gs <- extract(sens_res$stan_fit, pars = "gamma")[["gamma"]]
@@ -473,7 +671,11 @@ calculate_nder_stan <- function(sens_res, u_ei, am_intx, ...) {
     calculate_nder(params = NULL, 
                    alpha = as[r,], beta = bs[r,], gamma = gs[r,], 
                    u_ei = u_ei, am_intx = am_intx,
+                   yu_strength = yu_strength, mu_strength = mu_strength,
                    ...)
   }))
 }
+
+
+
 
