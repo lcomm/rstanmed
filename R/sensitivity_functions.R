@@ -281,8 +281,9 @@ simulate_data <- function(n, u_ei, am_intx, params = NULL) {
   
   # Baseline and treatment
   # Center baseline covariates at true prevalence
-  z1  <- rbinom(n, size = 1, prob = params$pz1) - params$pz1
-  z2  <- rbinom(n, size = 1, prob = params$pz2) - params$pz2
+  # TODO(LCOMM): figure out if centering Z1 and Z2 is the problem
+  z1  <- rbinom(n, size = 1, prob = params$pz1)# - params$pz1
+  z2  <- rbinom(n, size = 1, prob = params$pz2)# - params$pz2
   a   <- rbinom(n, size = 1, prob = plogis(cbind(1, z1, z2) %*% params$a_params))
   
   # Regression model data simulation
@@ -727,7 +728,7 @@ calculate_nder_stan <- function(stan_fit, u_ei, am_intx, ...) {
 #' @param R Number of weight replicates to draw
 #' @return K x R matrix with dirichlet weights in columns (K = 4 right now)
 get_bayesian_bootweights <- function(dat, R = 1) {
-  poss_patterns <- make_bl_types() - 0.5
+  poss_patterns <- make_bl_types()
   dat$.one <- 1
   obs_patterns <- aggregate(.one ~ z1 + z2, FUN = NROW, data = dat)
   counts <- merge(poss_patterns, obs_patterns, all.x = TRUE)$.one
