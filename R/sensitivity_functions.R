@@ -1,7 +1,7 @@
 
 #' Calculate bias of posterior mean in Stan parameter samples
 #' 
-#' @param estimat Length-P vector with each column corresponding to an estimate
+#' @param estimate Length-P vector with each column corresponding to an estimate
 #' @param truth Length-P vector of true parameter values
 #' @return Length-P vector of estimated bias
 #' @export
@@ -154,9 +154,9 @@ return_dgp_parameters <- function(u_ei, am_intx, yu_strength, mu_strength) {
   mu_strength <- unname(as.numeric(mu_strength))
   
   if (u_ei == 0) {
-    gamma <- setNames(c(-0.2, 0.2, 0.4), c("(i)", "z1", "z2"))
+    gamma <- setNames(c(-4, 3, 1), c("(i)", "z1", "z2"))
   } else if (u_ei == 1) {
-    gamma <- setNames(c(-0.2, 0.2, 0.4, 0.5), c("(i)", "z1", "z2", "a"))
+    gamma <- setNames(c(-4, 3, 1, 0.5), c("(i)", "z1", "z2", "a"))
   }
   
   if (am_intx == 0) {
@@ -171,7 +171,7 @@ return_dgp_parameters <- function(u_ei, am_intx, yu_strength, mu_strength) {
               pz1      = 0.5, 
               pz2      = 0.5, 
               gamma    = gamma,
-              beta     = setNames(c(-1, 0.3, 0.2, 0.7, mu_strength),
+              beta     = setNames(c(-3.7, 0.3, 0.2, 0.7, mu_strength),
                                   c("(i)", "z1", "z2", "a", "u")),
               alpha    = alpha,
               a_params = setNames(c(-0.2, 0.5, 0.7),
@@ -428,7 +428,6 @@ make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd")
     if (is.null(dd_control)) {
       stop("Need to specify input data set or simulation parameters for dd")
     } else {
-      
       # Basic option checks
       valid_options <- c("params", "small_n", "small_data", 
                          "partial_vague", "inflate_factor")
@@ -505,29 +504,73 @@ run_bdf_replicate <- function(n, prior_type, u_ei, am_intx,
   dl <- simulate_data(n = n, params = params)
   
   # Prior 
+  #TODO(LCOMM): implement dd_control as function argument better
+  #TODO(LCOMM): default to prior variance inflation later
+  if (is.null(dd_control)) {
+    dd_control = list(small_n = floor(n/10), 
+                      params = small_params,
+                      partial_vague = TRUE,
+                      inflate_factor = 1)
+  } else {
+    if (!("small_n" %in% names(dd_control))) {
+      dd_control$small_n <- floor(n/10)
+    }
+    if (!("params" %in% names(dd_control))) {
+      dd_control$params <- small_params
+    }
+    if (!("partial_vague" %in% names(dd_control))) {
+      dd_control$partial_vague <- TRUE
+    }
+    if (!("inflate_factor" %in% names(dd_control))) {
+      dd_control$inflate_factor <- 10
+    }
+  }
   prior <- make_prior(params = small_params, prior_type = "dd",
-                      dd_control = list(small_n = floor(n/10), 
-                                        params = small_params,
-                                        partial_vague = TRUE,
-                                        inflate_factor = 10))
+                      dd_control = dd_control)
   
   # Run Stan model and return fit
   sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, u_ei, am_intx, ...)
   res <- list(stan_fit = sf, params = params, data_list = dl)
   truth_nder <- calculate_nder(u_ei = params$u_ei,
                                am_intx = params$am_intx,
-                               yu_strength = params$alpha["u"],
-                               mu_strength = params$beta["u"],
+                               yu_strength = yu_strength,
+                               mu_strength = mu_strength,
                                mean = TRUE)
-  bias <- get_bias_stan(res$stan_fit, "meffects[1]", truth_nder)
-  coverage <- get_ci_coverage_stan(res$stan_fit, "meffects[1]", truth_nder)
-  width <- get_ci_width_stan(res$stan_fit, "meffects[1]")
+  estimate1_nder <- summary(res$stan_fit, pars = "meffects[1]")$summary[, "mean"]
+  v2_KxR <- calculate_nder_stan(res$stan_fit, params$u_ei, params$am_intx)
+  v2_samples <- colMeans(v2_KxR)
+  v2_bootweights <- get_bayesian_bootweights(dl$df, R = length(v2_samples))
+  v2_ci <- make_ci(v2_samples)
+  v2_ci_boot <- make_ci(colSums(v2_bootweights * v2_KxR))
+  estimate2_nder <- mean(v2_samples)
+  bias1 <- calculate_bias(estimate1_nder, truth_nder)
+  bias2 <- calculate_bias(estimate2_nder, truth_nder)
+  coverage1 <- get_ci_coverage_stan(res$stan_fit, "meffects[1]", truth_nder)
+  coverage2 <- check_coverage(v2_ci, truth_nder)
+  coverage2_boot <- check_coverage(v2_ci_boot, truth_nder)
+  width1 <- get_ci_width_stan(res$stan_fit, "meffects[1]")
+  width2 <- v2_ci[2] - v2_ci[1]
+  width2_boot <- v2_ci_boot[2] - v2_ci_boot[1]
   
   if (result_type == "raw") {
     return(list(stan_fit = sf, params = params, data_list = dl,
-                bias = bias, coverage = coverage, width = width))  
+                truth_nder = truth_nder, 
+                estimate1_nder = estimate1_nder,
+                estimate2_nder = estimate2_nder,
+                bias1 = bias1, bias2 = bias2,
+                coverage1 = coverage1, coverage2 = coverage2, 
+                coverage2_boot = coverage2_boot,
+                width1 = width1, width2 = width2,
+                width2_boot = width2_boot))
   } else {
-    return(list(bias = bias, coverage = coverage, width = width))
+    return(list(truth_nder = truth_nder, 
+                estimate1_nder = estimate1_nder,
+                estimate2_nder = estimate2_nder,
+                bias1 = bias1, bias2 = bias2,
+                coverage1 = coverage1, coverage2 = coverage2, 
+                coverage2_boot = coverage2_boot,
+                width1 = width1, width2 = width2,
+                width2_boot = width2_boot))
   }
   
 }
@@ -653,29 +696,43 @@ calculate_nder <- function(params = NULL,
 #' Not simulation-based!
 #' Returns conditional on specific z1, z2 values
 #' 
-#' @param sens_res Result list with element stan_fit containing the stan fit
+#' @param stan_fit Result list with element stan_fit containing the stan fit
 #' @param u_ei Whether unmeasured confounder is exposure-induced
 #' @param am_intx Whether outcome model includes exposure-mediator interaction
 #' @param \dots Parameters to pass to \code{\link{calculate_nder}}
 #' @return K x R matrix of conditional NDER values for the K covariate patterns requested
 #' from R MCMC iterations (excludes warmup)
 #' @export
-calculate_nder_stan <- function(sens_res, u_ei, am_intx, 
-                                yu_strength, mu_strength, ...) {
-  as <- extract(sens_res$stan_fit, pars = "alpha")[["alpha"]]
-  bs <- extract(sens_res$stan_fit, pars = "beta")[["beta"]]
-  gs <- extract(sens_res$stan_fit, pars = "gamma")[["gamma"]]
+calculate_nder_stan <- function(stan_fit, u_ei, am_intx, ...) {
+  as <- extract(stan_fit, pars = "alpha")[["alpha"]]
+  bs <- extract(stan_fit, pars = "beta")[["beta"]]
+  gs <- extract(stan_fit, pars = "gamma")[["gamma"]]
   niter <- nrow(as)
+  ncol_alpha <- ncol(as)
+  ncol_beta <- ncol(bs)
   
   return(sapply(1:niter, function(r) {
     calculate_nder(params = NULL, 
                    alpha = as[r,], beta = bs[r,], gamma = gs[r,], 
                    u_ei = u_ei, am_intx = am_intx,
-                   yu_strength = yu_strength, mu_strength = mu_strength,
+                   yu_strength = as[r, ncol_alpha], 
+                   mu_strength = bs[r, ncol_beta],
                    ...)
   }))
 }
 
-
-
-
+#' Make matrix of covariate pattern weights for Bayesian bootstrap
+#' 
+#' @param dat Data frame containing z1 and z2
+#' @param R Number of weight replicates to draw
+#' @return K x R matrix with dirichlet weights in columns (K = 4 right now)
+get_bayesian_bootweights <- function(dat, R = 1) {
+  poss_patterns <- make_bl_types() - 0.5
+  dat$.one <- 1
+  obs_patterns <- aggregate(.one ~ z1 + z2, FUN = NROW, data = dat)
+  counts <- merge(poss_patterns, obs_patterns, all.x = TRUE)$.one
+  counts[is.na(counts)] <- 0
+  bootweights <- replicate(R, sapply(counts, FUN = function(x) 
+                           rgamma(n = 1, shape = x, scale = 1)))
+  return(bootweights %*% diag(1 / colSums(bootweights)))
+}
