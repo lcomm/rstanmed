@@ -276,7 +276,7 @@ make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full"),
 #' @export
 simulate_data <- function(n, u_ei, am_intx, params = NULL) {
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei = 1, am_intx = 1)
+    params <- return_dgp_parameters(u_ei = u_ei, am_intx = am_intx)
   }
   
   # Baseline and treatment
