@@ -2,9 +2,9 @@
 % Please edit documentation in R/sensitivity_functions.R
 \name{make_x_y}
 \alias{make_x_y}
-\title{Construct design matrix for outcoe regression model}
+\title{Construct design matrix for outcome regression model}
 \usage{
-make_x_y(z1, z2, a, m, u = NULL, type = c("observed", "full"))
+make_x_y(z1, z2, a, m, u = NULL, type = c("observed", "full"), am_intx)
 }
 \arguments{
 \item{z1}{Length-N vector for baseline confounder Z1}
@@ -19,10 +19,12 @@ make_x_y(z1, z2, a, m, u = NULL, type = c("observed", "full"))
 
 \item{type}{Whether to make naive matrix excluding U ("observed") or 
 full matrix that includes U ("full")}
+
+\item{am_intx}{0/1 Whether to include A*M interaction}
 }
 \value{
 NxP design matrix for the Y outcome model
 }
 \description{
-Construct design matrix for outcoe regression model
+Construct design matrix for outcome regression model
 }

@@ -4,14 +4,22 @@
 \alias{bin_bin_sens_stan}
 \title{Binary (M) - binary (Y) sensitivity analysis}
 \usage{
-bin_bin_sens_stan(outcomes, designs, prior, ...)
+bin_bin_sens_stan(outcomes, designs, prior, u_ei = NULL, am_intx = NULL,
+  mean_only = 1, ...)
 }
 \arguments{
 \item{outcomes}{List of named regression outcomes (named m and y)}
 
-\item{designs}{List of named design matrices (named x_m, x_y, x_u)}
+\item{designs}{List of named design matrices (named x_m, x_y, x_u) - with exposure
+named a}
 
 \item{prior}{List of named prior means and variance-covariance matrices}
+
+\item{u_ei}{0/1 Whether u is assumed to be exposure-induced}
+
+\item{am_intx}{0/1 Whether exposure-mediation interaction is included in outcome model}
+
+\item{mean_only}{0/1 Whether to sample outcomes or use means for mediation qtys}
 
 \item{...}{Additional arguments passed to \code{rstan::sampling}}
 }

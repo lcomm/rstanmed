@@ -4,18 +4,20 @@
 \alias{make_prior}
 \title{Construct prior list based on type of sensitivity analysis}
 \usage{
-make_prior(params, prior_type, n = NULL, n_frac = 0.1)
+make_prior(params, prior_type = c("unit", "partial", "strict", "dd"),
+  dd_control = NULL)
 }
 \arguments{
 \item{params}{List of parameters}
 
-\item{prior_type}{Variance type: unit variance ("unit"), informative priors on
-non-identifiable parameters ("partial"), strong prior information 
-("strict"), or data-driven ("dd strict") based on MLE from a simulated data set}
+\item{prior_type}{Variance type: unit variance ("unit"), informative priors 
+on non-identifiable parameters ("partial"), strong prior information 
+("strict"), or data-driven ("dd") based on external or simulated data set}
 
-\item{n}{Size of data set (only needed if data-driven)}
-
-\item{n_frac}{Ratio of small n to analysis data n (only needed if data-driven)}
+\item{dd_control}{Named list of data-driven options. If external data is to
+be used, "small_data" needs to be formatted as output from 
+\code{\link{simulate_data}}. If secondary data source is to be simulated, 
+need a list of parameters as from \code{\link{return_dgp_parameters}}.}
 }
 \value{
 Named list of prior means and variance-covariance matrices

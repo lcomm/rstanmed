@@ -110,7 +110,7 @@ get_bias_stan <- function(stan_fit, pars, truth) {
   return(estimate - truth)
 }
 
-#' Calculate 95% credible interval coverage from a stan fit
+#' Calculate 95\% credible interval coverage from a stan fit
 #' 
 #' @param stan_fit Stan model fit object.
 #' @param pars Parameter name(s). See \code{\link[rstan]{extract}} for parsing details.
@@ -125,7 +125,7 @@ get_ci_coverage_stan <- function(stan_fit, pars, truth) {
   return(covers)
 }
 
-#' Calculate 95% credible interval coverage from a stan fit
+#' Calculate 95\% credible interval coverage from a stan fit
 #' 
 #' @param stan_fit Stan model fit object.
 #' @param pars Parameter name(s). See \code{\link[rstan]{extract}} for parsing details.
@@ -154,9 +154,9 @@ return_dgp_parameters <- function(u_ei, am_intx, yu_strength, mu_strength) {
   mu_strength <- unname(as.numeric(mu_strength))
   
   if (u_ei == 0) {
-    gamma <- setNames(c(-4, 3, 1), c("(i)", "z1", "z2"))
+    gamma <- setNames(c(-2, 0, 0), c("(i)", "z1", "z2"))
   } else if (u_ei == 1) {
-    gamma <- setNames(c(-4, 3, 1, 0.5), c("(i)", "z1", "z2", "a"))
+    gamma <- setNames(c(-2, 0, 0, 0.35), c("(i)", "z1", "z2", "a"))
   }
   
   if (am_intx == 0) {

@@ -2,12 +2,12 @@
 % Please edit documentation in R/sensitivity_functions.R
 \name{check_coverage}
 \alias{check_coverage}
-\title{Evaluate Y/N credible interval coverage for Stan samples}
+\title{Evaluate Y/N credible interval coverage}
 \usage{
-check_coverage(samples, truth)
+check_coverage(ci, truth)
 }
 \arguments{
-\item{samples}{SxP Matrix with each column corresponding to a parameter}
+\item{ci}{Length-2 vector or Px2 matrix of CI lower and upper bounds}
 
 \item{truth}{Length-P vector of true parameter values}
 }
@@ -15,5 +15,5 @@ check_coverage(samples, truth)
 Length-P logical vector of interval coverage
 }
 \description{
-Evaluate Y/N credible interval coverage for Stan samples
+Evaluate Y/N credible interval coverage
 }

@@ -4,10 +4,10 @@
 \alias{calculate_bias}
 \title{Calculate bias of posterior mean in Stan parameter samples}
 \usage{
-calculate_bias(samples, truth)
+calculate_bias(estimate, truth)
 }
 \arguments{
-\item{samples}{SxP Matrix with each column corresponding to a parameter}
+\item{estimate}{Length-P vector with each column corresponding to an estimate}
 
 \item{truth}{Length-P vector of true parameter values}
 }

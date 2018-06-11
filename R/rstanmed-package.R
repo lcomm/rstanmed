@@ -11,6 +11,7 @@
 #' @import Rcpp
 #' @import rstantools
 #' @import matrixStats
+#' @import batchtools
 #'
 #' @description stuff
 NULL

@@ -3,12 +3,19 @@
 \name{calculate_nder_stan}
 \alias{calculate_nder_stan}
 \title{Calculate NDER from Stan sensitivity analysis fit
+Not simulation-based!
 Returns conditional on specific z1, z2 values}
 \usage{
-calculate_nder_stan(sens_res, ...)
+calculate_nder_stan(stan_fit, u_ei, am_intx, ...)
 }
 \arguments{
-\item{sens_res}{Result list with element stan_fit containing the stan fit}
+\item{stan_fit}{Result list with element stan_fit containing the stan fit}
+
+\item{u_ei}{Whether unmeasured confounder is exposure-induced}
+
+\item{am_intx}{Whether outcome model includes exposure-mediator interaction}
+
+\item{\dots}{Parameters to pass to \code{\link{calculate_nder}}}
 }
 \value{
 K x R matrix of conditional NDER values for the K covariate patterns requested
@@ -16,5 +23,6 @@ from R MCMC iterations (excludes warmup)
 }
 \description{
 Calculate NDER from Stan sensitivity analysis fit
+Not simulation-based!
 Returns conditional on specific z1, z2 values
 }

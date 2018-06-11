@@ -2,12 +2,12 @@
 % Please edit documentation in R/sensitivity_functions.R
 \name{get_parameter_bias_coverage}
 \alias{get_parameter_bias_coverage}
-\title{Calculate bias and coverage from a mediation fit}
+\title{Calculate parameter bias and coverage from a mediation fit}
 \usage{
 get_parameter_bias_coverage(stan_fit, params)
 }
 \arguments{
-\item{stan_fit}{The Stan fit object (see \code{\link{run_sensitivity}})
+\item{stan_fit}{The Stan fit object (see \code{\link{run_bdf_replicate}})
 Should have parameter vectors labeled alpha, beta, and gamma}
 
 \item{params}{List of true parameter values, labeled alpha, beta, and gamma}
@@ -16,5 +16,5 @@ Should have parameter vectors labeled alpha, beta, and gamma}
 List of bias and coverage vectors for all parameters
 }
 \description{
-Calculate bias and coverage from a mediation fit
+Calculate parameter bias and coverage from a mediation fit
 }
