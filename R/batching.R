@@ -13,6 +13,7 @@ chunk_registry <- function(reg, n.chunks = NULL, chunk.size = NULL) {
   return(ids)
 }
 
+
 #' Function to submit many BDF simulation study replicates using a batchtools
 #' registry
 #' 
@@ -75,15 +76,26 @@ submit_bdf_jobs <- function(registry, transport, R,
                           iter = iter, chains = chains), 
          reg = registry)
   
-  # Submit jobs
-  ids <- chunk_registry(reg = registry, chunk.size = chunk.size)
-  n_ratios <- round(args$n/min(n))
-  ids$walltime <- n_ratios * 60 * time_each
-  ids$memory <- n_ratios * memory
-  batchtools::submitJobs(ids = ids,
-                         reg = registry,
-                         resources = list(max.concurrent.jobs = 
-                                          max.concurrent.jobs))
+  # Decide chunking, keeping n homogeneous within chunks
+  # ids <- cbind(getJobTable(reg = registry)[, "job.id"], n = args$n)
+  # ids[, n := args$n]
+  # ids[, chunk := chunk(job.id, chunk.size = chunk.size), by = "n"]
+  # ids[, chunk := .GRP, by = c("n", "chunk")]
+  
+  # Submit job chunks grouped by sample size n
+  # for (n_val in unique(n)) {
+    n_ratio <- 1 #round(n_val / min(n))
+    walltime <- 60 * n_ratio * time_each * chunk.size
+    memory <- n_ratio * memory
+    batchtools::submitJobs(ids = chunk_registry(reg = registry,
+                                                chunk.size = chunk.size),
+                           # ids = ids[ids$n == n_val, -"n"],
+                           reg = registry,
+                           resources = list(walltime = walltime,
+                                            memory = memory,
+                                            max.concurrent.jobs = 
+                                            max.concurrent.jobs))
+  # }
   
   # Reset option
   options(batchtools.progress = prog_opt)
