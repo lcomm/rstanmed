@@ -268,15 +268,18 @@ make_x_y <- function(z1, z2, a, m, u = NULL, type = c("observed", "full"),
 #' @param n Number of observations to simulate
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
 #' @param am_intx 0/1 flag for A*M interaction in outcome model
+#' @param yu_strength Log-OR of U in outcome model
+#' @param mu_strength Log-OR of U in mediator model
 #' @param params (Optional) List of data-generating parameters
 #' see \code{\link{return_dgp_parameters}} for details on structure
 #' @return List containing: df (data frame with n rows),
 #' outcomes (named list of m and y outcomes), and designs (named list of 
 #' design matrices for u, m, and y regression models)
 #' @export
-simulate_data <- function(n, u_ei, am_intx, params = NULL) {
+simulate_data <- function(n, u_ei, am_intx, yu_strength, mu_strength, params = NULL) {
   if (is.null(params)) {
-    params <- return_dgp_parameters(u_ei = u_ei, am_intx = am_intx)
+    params <- return_dgp_parameters(u_ei = u_ei, am_intx = am_intx,
+                                    yu_strength = yu_strength, mu_strength = mu_strength)
   }
   
   # Baseline and treatment
