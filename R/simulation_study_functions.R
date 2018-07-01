@@ -9,6 +9,26 @@ boot_samp <- function(df) {
 }
 
 
+
+#' Return transportability parameters
+#' 
+#' Convert transport = T/F into strengths for Y-U and M-U relationships
+#' 
+#' @param transport Whether transportability should hold
+#' @return Length-4 vector of (yu_strength, mu_strength, small_yu_strength, 
+#' small_mu_strength)
+#' @export
+convert_transport_to_strengths <- function(transport) {
+  if (transport) {
+    strengths <- rep(1.5, 4)
+  } else {
+    strengths <- c(1.5, 1.5, 0, 0)
+  }
+  return(strengths)
+}
+
+
+
 #' Mean-center a design matrix, except for intercept
 #' 
 #' Centers all non-intercept variables to zero, and sets interaction
@@ -35,7 +55,6 @@ mean_xmat <- function(xmat) {
   
   return(xmat_mc)
 }
-
 
 
 
@@ -112,31 +131,6 @@ calculate_intx_gamma_factor <- function(formula_y, df, covariate_df = NULL,
   
 }
 
-
-#' Return list of formulas needed for frequentist corrections
-#' 
-#' Does not take u_ei as an input because no frequentist correction handles that
-#' 
-#' @param am_intx Whether exposure-mediator interaction in outcome regression
-#' @return Named list of formulas
-#' @export
-make_formulas <- function(am_intx) {
-  formula_u <- formula(u ~ 1 + z1 + z2)
-  formula_u_with_m <- formula(u ~ 1 + z1 + z2 + m)
-  formula_m <- formula(m ~ 1 + z1 + z2 + a + u)
-  formula_m_naive <- formula(m ~ 1 + z1 + z2 + a)
-  if (am_intx) {
-    formula_y_naive <- formula(y ~ 1 + z1 + z2 + a + m + a:m)
-    formula_y <- formula(y ~ 1 + z1 + z2 + a + m + a:m + u)
-  } else {
-    formula_y_naive <- formula(y ~ 1 + z1 + z2 + a + m)
-    formula_y <- formula(y ~ 1 + z1 + z2 + a + m + u)
-  }
-
-  return(list(formula_u = formula_u, formula_u_with_m = formula_u_with_m,
-              formula_m = formula_m, formula_m_naive = formula_m_naive,
-              formula_y = formula_y, formula_y_naive = formula_y_naive))
-}
 
 
 #' Calculate delta(s) for gamma-delta correction
@@ -220,78 +214,6 @@ calculate_dg_gamma_factor <- function(df, covariate_df = NULL,
 }
 
 
-# all_freq_corr <- function(big_dl, small_dl, am_intx){
-#   
-#   # Make formulas
-#   formulas <- make_formulas(am_intx)
-#   
-#   # Fit U logistic regression model in small data set
-#   fit_u <- glm(formula = formulas$formula_u, family = binomial(link = "logit"),
-#                data = small_dl$df)
-#   
-#   # Fit outcome regression in main data set
-#   fit_y <- glm(formula = formulas$formula_y, family = binomial(link = "logit"), 
-#                data = big_dl$df)
-#   
-#   # Calculate gamma as on p. 84
-#   x_y_with_u0 <- x_y_with_u1 <- cbind(big_dl$designs$x_y, u = NA)
-#   x_y_with_u0[, "u"] <- 0
-#   x_y_with_u1[, "u"] <- 1
-#   cval_u0 <- mean_xmat(x_y_with_u0)
-#   cval_u1 <- mean_xmat(x_y_with_u1)
-#   gam_res <- calculate_gamma_factor(small_dl, 
-#                                     cval_u0 = NULL, cval_u1 = NULL)
-#   gam <- gam_res$gam
-#   cprobflag <- gam_res$cprobflag
-#   
-#   # Calculate B correction factors as on p. 85
-#   cval_u <- mean_xmat(big_dl$designs$x_u)
-#   logB0 <- calc_logB0(gam, fit_u)
-#   logB1 <- calc_logB1(gam, fit_u)
-#   logB2 <- calc_logB2(gam, fit_u)
-#   
-#   # Extract coefficients to correct
-#   theta1 <- coef(fit_y)["a"]
-#   theta2 <- coef(fit_y)["m"]
-#   theta3 <- ifelse(am_intx, coef(fit_y)["a:m"], 0)
-#   
-#   # Correct coefficients as on p. 85
-#   theta1_dag <- theta1 - logB0
-#   theta2_dag <- theta2 - logB2
-#   theta3_dag <- theta3 - logB1 + logB0
-#   
-#   # Fit mediator model
-#   fit_m <- glm(formula = formula_m, family = binomial(link = "logit"),
-#                data = big_dl$df)
-#   
-#   # Calculate uncorrected resid desparity
-#   # coef_m <- coef(fit_m)
-#   # coef_y <- coef(fit_y)
-#   # uc_NDE <- calc_NDE(coef_m, coef_y, cvalY, cvalMastar)
-#   uc_params <- list(u_ei = 0, am_intx = am_intx,
-#                     alpha = coef(fit_y), beta = coef(fit_m), 
-#                     gamma = rep(0, NCOL(big_dl$designs$x_u)))
-#   uc_nder <- calculate_nder(params = uc_params, 
-#                             z1 = mean(big_dl$df$z1), z2 = mean(big_dl$df$z2),
-#                             mean = TRUE)
-#   
-#   # Calculate naive (no-interaction) corrected resid disparity
-#   # nc_NDE <- apply_gammadelta_corr(uc_NDE, cvalYU, YformulaU_nointer, small, fitU)
-#   
-#   # Calculate corrected resid desparity
-#   c_thetas         <- uc_params$alpha
-#   c_thetas["a"]    <- theta1_dag
-#   c_thetas["m"]    <- theta2_dag
-#   c_thetas["a:m"] <- theta3_dag
-#   c_NDE <- calc_NDE(betas, c_thetas, cvalY, cvalMastar)
-#   
-#   # Return both uncorrected and corrected versions + convergence flag
-#   ans <- c(uc_NDE, nc_NDE, c_NDE, cprobflag)
-#   names(ans) <- c("uc_NDE", "nc_NDE", "c_NDE", "cprobflag")
-#   return(ans)
-#   
-# }
-
 
 #' Function to get counts of a (Z1, Z2) covariate pattern from a data frame
 #' 
@@ -313,7 +235,6 @@ get_z1_z2_counts <- function(df) {
 }
 
 
-# Frequentist sensitivity -------------------------------------------------
 
 #' Calculate the naive/uncorrected (r)NDE estimate
 #' 
@@ -352,6 +273,7 @@ run_uncorrected <- function(df, am_intx, mean = TRUE) {
   }
   return(naive_nder)
 }
+
 
 
 #' Get a calculated (r)NDE, corrected using the delta-gamma
@@ -408,6 +330,7 @@ run_delta_gamma <- function(df, small_df) {
   return(avg_dg_nder)
   
 }
+
 
 
 #' Calculate the interaction-respecting corrected (r)NDE
@@ -560,13 +483,14 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
   cov_uc  <- check_coverage(ci = ci_uc, truth = truth_nder)
   cov_dg  <- check_coverage(ci = ci_dg, truth = truth_nder)
   cov_ix  <- check_coverage(ci = ci_ix, truth = truth_nder)
-  width_uc <- ci_uc[2] - ci_uc[1]
-  width_dg <- ci_dg[2] - ci_dg[1]
-  width_ix <- ci_ix[2] - ci_ix[1]
+  width_uc <- get_ci_width(ci_uc)
+  width_dg <- get_ci_width(ci_dg)
+  width_ix <- get_ci_width(ci_ix)
   
   if (result_type == "raw") {
     return(list(params = params, data_list = dl,
-                estimates = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
+                truth_nder = truth_nder,
+                estimate = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
                 bias = c(uc = nder_uc - truth_nder,
                          dg = nder_dg - truth_nder,
                          ix = nder_ix - truth_nder),
@@ -574,8 +498,8 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
                 ci_cov = c(uc = cov_uc, dg = cov_dg, ix = cov_ix),
                 ci_width = c(uc = width_uc, dg = width_dg, ix = width_ix)))
   } else {
-    return(list(truth = truth_nder,
-                estimates = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
+    return(list(truth_nder = truth_nder,
+                estimate = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
                 bias = c(uc = nder_uc - truth_nder,
                          dg = nder_dg - truth_nder,
                          ix = nder_ix - truth_nder),
@@ -586,3 +510,110 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
 }
 
 
+
+#' Run a single replicate of the binary-binary mediation sensitivity analysis
+#' 
+#' @param n Number of observations in data set
+#' @param u_ei 0/1 flag for whether U should be exposure-induced
+#' @param am_intx 0/1 flag for exposure-mediator interaction in outcome model
+#' @param yu_strength Log-OR of U in outcome model
+#' @param mu_strength Log-OR of U in mediator model
+#' @param params List of data generating parameters for big data set (will be 
+#' created by \code{\link{return_dgp_parameters}} if not specified)
+#' @param small_yu_strength Log-OR of U in outcome model for small data
+#' @param small_mu_strength Log-OR of U in mediator model for small data
+#' @param small_params List of data generating parameters for small data set 
+#' (will be created by \code{\link{return_dgp_parameters}} if not specified)
+#' @param prior_type See \code{\link{make_prior}} for details
+#' @param result_type Whether to return full object ("raw") or only selected
+#' information about NDER
+#' @param ... Additional parameters to be passed to bin_bin_sens_stan
+#' @return Stan model fit object
+#' @export
+run_bdf_replicate <- function(n, u_ei, am_intx, 
+                              yu_strength, mu_strength, params = NULL,
+                              small_yu_strength, small_mu_strength, 
+                              small_params = NULL, dd_control = NULL,
+                              prior_type = "dd",
+                              result_type = c("raw", "processed"),
+                              ...) {
+  
+  # Basic checks
+  stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
+  if (is.null(params)) {
+    params <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
+  }
+  params$prior <- prior_type
+  
+  if (is.null(small_params)) {
+    small_params <- return_dgp_parameters(u_ei, am_intx, 
+                                          small_yu_strength, small_mu_strength)
+  }
+  
+  # Simulate data
+  dl <- simulate_data(n = n, params = params)
+  
+  # Prior 
+  #TODO(LCOMM): implement dd_control as function argument better
+  #TODO(LCOMM): default to prior variance inflation later
+  if (is.null(dd_control)) {
+    dd_control = list(small_n = floor(n/10), 
+                      params = small_params,
+                      partial_vague = TRUE,
+                      inflate_factor = 1)
+  } else {
+    if (!("small_n" %in% names(dd_control))) {
+      dd_control$small_n <- floor(n/10)
+    }
+    if (!("params" %in% names(dd_control))) {
+      dd_control$params <- small_params
+    }
+    if (!("partial_vague" %in% names(dd_control))) {
+      dd_control$partial_vague <- TRUE
+    }
+    if (!("inflate_factor" %in% names(dd_control))) {
+      dd_control$inflate_factor <- 10
+    }
+  }
+  prior <- make_prior(params = small_params, prior_type = "dd",
+                      dd_control = dd_control)
+  
+  # Run Stan model and return fit
+  sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, u_ei, am_intx, ...)
+  res <- list(stan_fit = sf, params = params, data_list = dl)
+  truth_nder <- calculate_nder(params = params,
+                               u_ei = u_ei, am_intx = am_intx,
+                               mean = TRUE)
+  
+  # Post-process
+  gc <- extract_nder_gcomp(res$stan_fit)
+  gf <- extract_nder_gform(res$stan_fit, dl$df, u_ei = u_ei, am_intx = am_intx)
+  nder_gc <- gc[1]
+  nder_gf <- gf[1]
+  ci_gc <- gc[2:3]
+  ci_gf <- gf[2:3]
+  cov_gc  <- check_coverage(ci = ci_gc, truth = truth_nder)
+  cov_gf  <- check_coverage(ci = ci_gf, truth = truth_nder)
+  width_gc <- get_ci_width(ci_gc)
+  width_gf <- get_ci_width(ci_gf)
+  
+  if (result_type == "raw") {
+    return(list(stan_fit = sf, params = params, data_list = dl,
+                truth_nder = truth_nder, 
+                estimate = c(gc = nder_gc, gf = nder_gf),
+                bias = c(gc = nder_gc - truth_nder,
+                         gf = nder_gf - truth_nder),
+                ci = c(gc = ci_gc, gf = ci_gf),
+                ci_cov = c(gc = cov_gc, gf = cov_gf),
+                ci_width = c(gc = width_gc, gf = width_gf)))
+    
+  } else {
+    return(list(truth_nder = truth_nder, 
+                estimate = c(gc = nder_gc, gf = nder_gf),
+                bias = c(gc = nder_gc - truth_nder,
+                         gf = nder_gf - truth_nder),
+                ci = c(gc = ci_gc, gf = ci_gf),
+                ci_cov = c(gc = cov_gc, gf = cov_gf),
+                ci_width = c(gc = width_gc, gf = width_gf)))
+  }
+}
