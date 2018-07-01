@@ -3,7 +3,7 @@
 \name{calculate_nder_stan}
 \alias{calculate_nder_stan}
 \title{Calculate NDER from Stan sensitivity analysis fit
-Not simulation-based!
+Not simulation-based! Closed form, g-formula
 Returns conditional on specific z1, z2 values}
 \usage{
 calculate_nder_stan(stan_fit, u_ei, am_intx, ...)
@@ -23,6 +23,6 @@ from R MCMC iterations (excludes warmup)
 }
 \description{
 Calculate NDER from Stan sensitivity analysis fit
-Not simulation-based!
+Not simulation-based! Closed form, g-formula
 Returns conditional on specific z1, z2 values
 }

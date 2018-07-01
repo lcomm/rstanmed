@@ -4,7 +4,7 @@
 \alias{simulate_data}
 \title{Simulate data set}
 \usage{
-simulate_data(n, u_ei, am_intx, params = NULL)
+simulate_data(n, u_ei, am_intx, yu_strength, mu_strength, params = NULL)
 }
 \arguments{
 \item{n}{Number of observations to simulate}
@@ -12,6 +12,10 @@ simulate_data(n, u_ei, am_intx, params = NULL)
 \item{u_ei}{0/1 flag for whether U should be exposure-induced}
 
 \item{am_intx}{0/1 flag for A*M interaction in outcome model}
+
+\item{yu_strength}{Log-OR of U in outcome model}
+
+\item{mu_strength}{Log-OR of U in mediator model}
 
 \item{params}{(Optional) List of data-generating parameters
 see \code{\link{return_dgp_parameters}} for details on structure}

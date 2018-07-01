@@ -1,7 +1,7 @@
 Package: rstanmed
 Type: Package
 Title: Mediation in Stan
-Version: 0.1
+Version: 0.2
 Date: 2018-01-24
 Author: Leah Comment
 Maintainer: Leah Comment <leahcomment@g.harvard.edu>
@@ -13,5 +13,6 @@ SystemRequirements: GNU make
 LinkingTo: StanHeaders (>= 2.17.2), rstan (>= 2.17.3), BH (>= 1.65.0.1), Rcpp (>= 0.12.15), RcppEigen (>= 0.3.3.3.1)
 RoxygenNote: 6.0.1
 Suggests: knitr,
-    rmarkdown
+    rmarkdown,
+    testthat
 VignetteBuilder: knitr

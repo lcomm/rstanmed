@@ -35,7 +35,7 @@ calculate_nder(params = NULL, alpha = NULL, beta = NULL, gamma = NULL,
 give every combination equal weight}
 }
 \value{
-K x 1 Matrix of conditional NDERs, for each of K covariate patterns
+Length-K vector of conditional NDERs, for each of K covariate patterns
 }
 \description{
 Calculate randomized interventional analog to natural direct effect
