@@ -156,14 +156,14 @@ return_dgp_parameters <- function(u_ei, am_intx, yu_strength, mu_strength) {
   if (u_ei == 0) {
     gamma <- setNames(c(-0.4, 0, 0), c("(i)", "z1", "z2"))
   } else if (u_ei == 1) {
-    gamma <- setNames(c(-0.4, 0, 0, 2), c("(i)", "z1", "z2", "a"))
+    gamma <- setNames(c(-0.4, 0, 0, 1.5), c("(i)", "z1", "z2", "a"))
   }
   
   if (am_intx == 0) {
     alpha <- setNames(c(-2, 0.3, 0.2, 1, 0.8, yu_strength),
                       c("(i)", "z1", "z2", "a", "m", "u"))
   } else if (am_intx == 1) {
-    alpha <- setNames(c(-2, 0.3, 0.2, 1, 0.8, 0.1, yu_strength),
+    alpha <- setNames(c(-2, 0.3, 0.2, 1, 0.8, 1, yu_strength),
                       c("(i)", "z1", "z2", "a", "m", "a:m", "u"))
   }
   return(list(u_ei     = u_ei,

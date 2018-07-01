@@ -55,9 +55,9 @@ submit_bdf_jobs <- function(registry, transport, R,
   options(batchtools.progress = FALSE)
   
   if (transport) {
-    strengths <- rep(0.7, 4)
+    strengths <- rep(1.5, 4)
   } else {
-    strengths <- c(0.7, 0.7, 0, 0)
+    strengths <- c(1.5, 1.5, 0, 0)
   }
   
   # Make job
