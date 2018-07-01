@@ -591,7 +591,7 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
   if (result_type == "raw") {
     return(list(stan_fit = sf, params = params, data_list = dl,
                 truth_nder = truth_nder, 
-                estimates = c(gc = nder_gc, gform = nder_gf),
+                estimates = c(gc = nder_gc, gf = nder_gf),
                 bias = c(gc = nder_gc - truth_nder,
                          gf = nder_gf - truth_nder),
                 ci = c(gc = ci_gc, gf = ci_gf),
