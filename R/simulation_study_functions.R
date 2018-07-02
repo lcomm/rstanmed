@@ -355,7 +355,8 @@ run_intx_corr <- function(df, small_df, am_intx) {
   cov_df$counts <- get_z1_z2_counts(df)
 
   # Reference level for bias correction is u'
-  u_prime <- aggregate(u ~ z1 + z2, data = small_df[small_df$a == 0,], 
+  # Set reference level as if U is a baseline confounder
+  u_prime <- aggregate(u ~ z1 + z2, data = small_df, 
                        FUN = mean)[, "u"]
   a <- 1
   a_star <- 0
@@ -527,6 +528,7 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
 #' @param prior_type See \code{\link{make_prior}} for details
 #' @param result_type Whether to return full object ("raw") or only selected
 #' information about NDER
+#' @param n_ratio For prior_type = "dd", ratio of big:small sample sizes
 #' @param ... Additional parameters to be passed to bin_bin_sens_stan
 #' @return Stan model fit object
 #' @export
@@ -535,6 +537,7 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
                               small_yu_strength, small_mu_strength, 
                               small_params = NULL, dd_control = NULL,
                               prior_type = "dd",
+                              n_ratio = 10,
                               result_type = c("raw", "processed"),
                               ...) {
   
@@ -557,13 +560,13 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
   #TODO(LCOMM): implement dd_control as function argument better
   #TODO(LCOMM): default to prior variance inflation later
   if (is.null(dd_control)) {
-    dd_control = list(small_n = floor(n/10), 
+    dd_control = list(small_n = floor(n / n_ratio), 
                       params = small_params,
                       partial_vague = TRUE,
                       inflate_factor = 1)
   } else {
     if (!("small_n" %in% names(dd_control))) {
-      dd_control$small_n <- floor(n/10)
+      dd_control$small_n <- floor(n / n_ratio)
     }
     if (!("params" %in% names(dd_control))) {
       dd_control$params <- small_params

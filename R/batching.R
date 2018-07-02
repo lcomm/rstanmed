@@ -39,7 +39,7 @@ process_clear_registry <- function(clear_existing, registry) {
 #' 
 #' @param registry batchtools registry object
 #' @param transport TRUE/FALSE for whether to make effects transportable
-#' @param R Number of replicates
+#' @param seed Seed vector (\code{seed = 1:R} does R replicates)
 #' @param clear_existing Whether to clear existing registry first
 #' @param u_ei Exposure-induced flag values
 #' @param am_intx Exposure-mediator flag values
@@ -53,15 +53,16 @@ process_clear_registry <- function(clear_existing, registry) {
 #' @param max.concurrent.jobs Maximum number of jobs at the same time
 #' @return None; jobs will be submitted and update in registry
 #' @export
-submit_bdf_jobs <- function(registry, transport, R, 
+submit_bdf_jobs <- function(registry, transport, seed, 
                             clear_existing = FALSE,
                             u_ei = 0:1, am_intx = 0:1, 
                             n = c(5000, 10000),
-                            result_type = "processed", 
+                            result_type = "processed",
                             iter = 2000, chains = 4,
                             chunk.size = 4,
                             time_each = 120,
                             memory = 4000,
+                            n_ratio = 10,
                             max.concurrent.jobs = 2000) {
   
   process_clear_registry(clear_existing, registry)
@@ -71,7 +72,7 @@ submit_bdf_jobs <- function(registry, transport, R,
   
   # Make job
   strengths <- convert_transport_to_strengths(transport)
-  args <- data.table::CJ(u_ei = u_ei, am_intx = am_intx, seed = 1:R,
+  args <- data.table::CJ(u_ei = u_ei, am_intx = am_intx, seed = seed,
                          yu_strength = strengths[1], 
                          mu_strength = strengths[2], 
                          small_yu_strength = strengths[3], 
@@ -83,6 +84,7 @@ submit_bdf_jobs <- function(registry, transport, R,
                           params = NULL,
                           small_params = NULL,
                           result_type = result_type,
+                          n_ratio = n_ratio,
                           iter = iter, chains = chains), 
          reg = registry)
   
@@ -106,7 +108,7 @@ submit_bdf_jobs <- function(registry, transport, R,
 #' 
 #' @param registry batchtools registry object
 #' @param transport TRUE/FALSE for whether to make effects transportable
-#' @param R Number of replicates
+#' @param seed Seed vector (\code{seed = 1:R} does R replicates)
 #' @param clear_existing Whether to clear existing registry first
 #' @param u_ei Exposure-induced flag values
 #' @param am_intx Exposure-mediator flag values
@@ -119,7 +121,7 @@ submit_bdf_jobs <- function(registry, transport, R,
 #' @param max.concurrent.jobs Maximum number of jobs at the same time
 #' @return None; jobs will be submitted and update in registry
 #' @export
-submit_frequentist_jobs <- function(registry, transport, R, 
+submit_frequentist_jobs <- function(registry, transport, seed, 
                                     clear_existing = FALSE,
                                     u_ei = 0:1, am_intx = 0:1, 
                                     n = c(5000, 10000),
@@ -137,7 +139,7 @@ submit_frequentist_jobs <- function(registry, transport, R,
   
   # Make job
   strengths <- convert_transport_to_strengths(transport)
-  args <- data.table::CJ(u_ei = u_ei, am_intx = am_intx, seed = 1:R,
+  args <- data.table::CJ(u_ei = u_ei, am_intx = am_intx, seed = seed,
                          yu_strength = strengths[1], 
                          mu_strength = strengths[2], 
                          small_yu_strength = strengths[3], 
@@ -166,7 +168,13 @@ submit_frequentist_jobs <- function(registry, transport, R,
 
 
 
-#' Make a shell data frame to con
+#' Make a shell data frame to contain job parameters from registry output
+#' 
+#' @param registry Batchtools registry containing jobs
+#' @param registry_type Whether registry has frequentist ("freq") or Bayesian ("bdf")
+#' results
+#' @return Data frame containing job parameters and empty columns for results
+#' @export
 make_simregdf_shell <- function(registry, registry_type = c("freq", "bdf")) {
   job_parl <- getJobPars(reg = registry)$job.pars
   if (registry_type == "freq") {
