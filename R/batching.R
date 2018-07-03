@@ -114,6 +114,7 @@ submit_bdf_jobs <- function(registry, transport, seed,
 #' @param am_intx Exposure-mediator flag values
 #' @param n Values for (big) sample sizes
 #' @param result_type Output type, from \code{\link{run_frequentist_replicate}}
+#' @param n_ratio 
 #' @param B Number of bootstrap samples for CI
 #' @param chunk.size How many jobs should be chunked together
 #' @param time_each Number of minutes for each job at the smallest n
@@ -150,6 +151,7 @@ submit_frequentist_jobs <- function(registry, transport, seed,
                        more.args = list(params = NULL,
                                         small_params = NULL,
                                         result_type = result_type,
+                                        n_ratio = n_ratio,
                                         B = B), 
                        reg = registry)
   

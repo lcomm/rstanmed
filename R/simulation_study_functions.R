@@ -432,6 +432,7 @@ run_intx_corr <- function(df, small_df, am_intx) {
 #' (will be created by \code{\link{return_dgp_parameters}} if not specified)
 #' @param result_type Whether to return full object ("raw") or only selected
 #' information about NDER
+#' @param n_ratio Ratio of big:small sample sizes
 #' @param B Number of bootstrap samples to take for CIs
 #' @return Named list of results
 #' @export
@@ -440,6 +441,7 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
                               small_yu_strength, small_mu_strength, 
                               small_params = NULL,
                               result_type = c("raw", "processed"),
+                              n_ratio = 10,
                               B = 500,
                               ...) {
   
@@ -455,7 +457,7 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
   
   # Simulate data
   dl <- simulate_data(n = n, params = params)
-  small_dl <- simulate_data(n = n, params = small_params)
+  small_dl <- simulate_data(n = floor(n / n_ratio), params = small_params)
   
   # Get true value
   truth_nder <- calculate_nder(params = NULL,
