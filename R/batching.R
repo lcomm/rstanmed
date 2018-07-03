@@ -178,7 +178,8 @@ submit_frequentist_jobs <- function(registry, transport, seed,
 make_simregdf_shell <- function(registry, registry_type = c("freq", "bdf")) {
   job_parl <- getJobPars(reg = registry)$job.pars
   if (registry_type == "freq") {
-    df <- data.frame(getJobPars(reg = registry)$job.id,
+    df <- data.frame(job_id = getJobPars(reg = registry)$job.id,
+                     seed = sapply(job_parl, function(x) x$seed),
                      u_ei = sapply(job_parl, function(x) x$u_ei),
                      am_intx = sapply(job_parl, function(x) x$am_intx),
                      n = sapply(job_parl, function(x) x$n),
@@ -202,7 +203,8 @@ make_simregdf_shell <- function(registry, registry_type = c("freq", "bdf")) {
                      ci_width_dg = NA,
                      ci_width_ix = NA)
   } else if (registry_type == "bdf") {
-    df <- data.frame(getJobPars(reg = registry)$job.id,
+    df <- data.frame(job_id = getJobPars(reg = registry)$job.id,
+                     seed = sapply(job_parl, function(x) x$seed),
                      u_ei = sapply(job_parl, function(x) x$u_ei),
                      am_intx = sapply(job_parl, function(x) x$am_intx),
                      n = sapply(job_parl, function(x) x$n),
