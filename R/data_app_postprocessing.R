@@ -271,7 +271,7 @@ process_data_app_gf <- function(seer_file_path, stan_fit, am_intx) {
   pm  <- array(NA, dim = c(n_patt, K_m, 2, 2)) #i, m, a, u
   py1 <- array(NA, dim = c(n_patt, 2, 2, K_m)) #i, a, u, m
   nder_gfs <- nier_gfs <- ter_gfs <- rep(NA, R)
-
+  
   # Loop over MCMC iterations
   for (r in 1:R) {
     coef_u <- coef_u_arr[, r]
@@ -297,15 +297,29 @@ process_data_app_gf <- function(seer_file_path, stan_fit, am_intx) {
                                             counts = counts)
   }
   
+  # Simulated versions
+  nder_gcs <- c(unlist(extract(stan_fit, pars = "meffects[1]")))
+  nier_gcs <- c(unlist(extract(stan_fit, pars = "meffects[2]")))
+  ter_gcs  <- c(unlist(extract(stan_fit, pars = "meffects[3]")))
+  nder_gc <- mean(nder_gcs)
+  nier_gc <- mean(nier_gcs)
+  ter_gc  <- mean(ter_gcs)
+  ci_nder_gc <- make_ci(nder_gcs)
+  ci_nier_gc <- make_ci(nier_gcs)
+  ci_ter_gc  <- make_ci(ter_gcs)
+  
   # Posterior summaries
   nder_gf <- mean(nder_gfs)
-  ci_nder_gf <- make_ci(nder_gfs)
   nier_gf <- mean(nier_gfs)
+  ter_gf  <- mean(ter_gfs)
   ci_nier_gf <- make_ci(nier_gfs)
-  ter_gf <- mean(ter_gfs)
-  ci_ter_gf <- make_ci(ter_gfs)
+  ci_nder_gf <- make_ci(nder_gfs)
+  ci_ter_gf  <- make_ci(ter_gfs)
   
-  return(list(nder_gfs = nder_gfs, nder_gf = nder_gf, ci_nder_gf = ci_nder_gf,
+  return(list(nder_gcs = nder_gcs, nder_gc = nder_gc, ci_nder_gc = ci_nder_gc,
+              nier_gcs = nier_gcs, nier_gc = nier_gc, ci_nier_gc = ci_nier_gc,
+              ter_gcs  = ter_gcs,  ter_gc  = ter_gc,  ci_ter_gc  = ci_ter_gc,
+              nder_gfs = nder_gfs, nder_gf = nder_gf, ci_nder_gf = ci_nder_gf,
               nier_gfs = nier_gfs, nier_gf = nier_gf, ci_nier_gf = ci_nier_gf,
               ter_gfs  = ter_gfs,  ter_gf  = ter_gf,  ci_ter_gf  = ci_ter_gf))
 }
