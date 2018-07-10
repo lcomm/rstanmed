@@ -150,7 +150,7 @@ run_stan_BSA <- function(big_df, small_df,
 #' 
 #' @param seer_file_path Path to SEER .txt file
 #' @param cancors_file_path Path to CanCORS .csv file
-#' @param save_file_path Where to save the resulting stan fit
+#' @param samples_file_path Where to save Stan samples
 #' @param am_intx Whether to have exposure-mediator interaction
 #' @param inf_fact Inflation factor for priors
 #' @param chains Number of chains to run
@@ -171,9 +171,9 @@ run_stan_BSA <- function(big_df, small_df,
 #' }
 run_data_app <- function(seer_file_path, 
                          cancors_file_path,
-                         save_file_path = paste0("data_app_res_",
-                                                 format(Sys.Date(), "%Y%m%d"), 
-                                                 ".rds"),
+                         samples_file_path = paste0("data_app_samples_",
+                                                    format(Sys.Date(), "%Y%m%d"),
+                                                    ".csv"),
                          am_intx = 1,
                          inf_fact = 100,
                          chains = 4, iter = 2000, seed = 42,
@@ -232,10 +232,8 @@ run_data_app <- function(seer_file_path,
                             am_intx = am_intx,
                             inf_fact = inf_fact,
                             chains = chains, iter = iter, seed = seed,
+                            sample_file = samples_file_path,
                             cores = mc.cores)
-  
-  # Save
-  save(bayes_res, file = save_file_path)
   
   return(bayes_res)
 }

@@ -128,9 +128,9 @@ model {
     
 }
 generated quantities {
-  matrix[N, 3] ceffects;
+
   vector[3] meffects;
-  ceffects = sim_ceffects_mcat_rng(alpha, beta, gamma, u_ei, x_y, x_m, x_u, 
-                                   am_intx, K_m, mean_only);
-  meffects = colMeans(ceffects);
+  meffects = colMeans(sim_ceffects_mcat_rng(alpha, beta, gamma, u_ei, 
+                                            x_y, x_m, x_u, 
+                                            am_intx, K_m, mean_only));
 }
