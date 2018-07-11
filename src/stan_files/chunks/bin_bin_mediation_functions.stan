@@ -88,7 +88,10 @@
     } else if (am_intx == 1) {
       alpha_zeroed[(P_y - 3):(P_y - 1)] = rep_vector(0, 3);
       lp = x_y * alpha_zeroed + a * alpha[P_y - 3] + m * alpha[P_y - 2] + 
-           a * m * alpha[P_y - 1] + u * alpha[P_y];
+           u * alpha[P_y];
+      if (a == 1) {
+        lp += m * alpha[P_y - 1]; 
+      }
     }
     
     if (mean_only == 1) {
