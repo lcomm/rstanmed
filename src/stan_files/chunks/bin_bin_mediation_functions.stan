@@ -88,10 +88,7 @@
     } else if (am_intx == 1) {
       alpha_zeroed[(P_y - 3):(P_y - 1)] = rep_vector(0, 3);
       lp = x_y * alpha_zeroed + a * alpha[P_y - 3] + m * alpha[P_y - 2] + 
-           u * alpha[P_y];
-      if (a == 1) {
-        lp += m * alpha[P_y - 1]; 
-      }
+           a * m * alpha[P_y - 1] + u * alpha[P_y];
     }
     
     if (mean_only == 1) {
@@ -129,35 +126,39 @@
                      int am_intx, int mean_only) {
     
     int N = rows(x_y);
-    vector[N] u0;
-    vector[N] u1;
-    vector[N] m0;
-    vector[N] m1;
+    vector[N] u0_1;
+    vector[N] u1_1;
+    vector[N] u0_2;
+    vector[N] u1_2;
+    vector[N] m0_1;
+    vector[N] m1_1;
+    vector[N] m0_2;
+    vector[N] m1_2;
     matrix[N, 4] quartet;
     
     // precursors
-    u0 = ua_rng(gamma, x_u, 0, u_ei);
-    if (u_ei == 1) {
-      u1 = ua_rng(gamma, x_u, 1, u_ei);
-    } else {
-      u1 = u0;
-    }
-    m0 = ma_rng(beta, x_m, u0, 0);
-    m1 = ma_rng(beta, x_m, u1, 1);
+    u0_1 = ua_rng(gamma, x_u, 0, u_ei);
+    u0_2 = ua_rng(gamma, x_u, 0, u_ei);
+    u1_1 = ua_rng(gamma, x_u, 1, u_ei);
+    u1_2 = ua_rng(gamma, x_u, 1, u_ei);
+    m0_1 = ma_rng(beta, x_m, u0_1, 0);
+    m1_1 = ma_rng(beta, x_m, u1_1, 1);
+    m0_2 = ma_rng(beta, x_m, u0_2, 0);
+    m1_2 = ma_rng(beta, x_m, u1_2, 1);
     
     // 0, 0
-    quartet[,1] = ya_rng(alpha, x_y, m0, u0, 0, am_intx, mean_only);
+    quartet[,1] = ya_rng(alpha, x_y, m0_1, u0_1, 0, am_intx, mean_only);
     
     // 0, 1
     // recanting witness
-    quartet[,2] = ya_rng(alpha, x_y, m1, u0, 0, am_intx, mean_only); 
+    quartet[,2] = ya_rng(alpha, x_y, m1_1, u0_2, 0, am_intx, mean_only); 
     
     // 1, 0
     // recanting witness
-    quartet[,3] = ya_rng(alpha, x_y, m0, u1, 1, am_intx, mean_only);
+    quartet[,3] = ya_rng(alpha, x_y, m0_2, u1_1, 1, am_intx, mean_only);
     
     // 1, 1
-    quartet[,4] = ya_rng(alpha, x_y, m1, u1, 1, am_intx, mean_only);
+    quartet[,4] = ya_rng(alpha, x_y, m1_2, u1_2, 1, am_intx, mean_only);
 
     return quartet;
   }
@@ -187,7 +188,7 @@
                           int am_intx, int mean_only) {
   // TODO: cleaner bootstrap
   int N = rows(x_y);
-  vector[N] boot_probs = rep_vector(1.0/N, N);
+  vector[N] boot_probs = rep_vector(1.0 / N, N);
   int row_i;
   matrix[N, 3] ceffects;
   matrix[N, 4] quartet;
