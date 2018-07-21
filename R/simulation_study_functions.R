@@ -356,16 +356,16 @@ run_intx_corr <- function(df, small_df, am_intx) {
 
   # Reference level for bias correction is u'
   # Set reference level as if U is a baseline confounder
-  u_prime <- aggregate(u ~ z1 + z2, data = small_df, 
-                       FUN = mean)[, "u"]
+  u_prime <- mean(df$u)
   a <- 1
   a_star <- 0
   
   # Fit models to calculate B_nde
-  fit_y <- glm(formula_y, data = small_df, family = binomial(link = "logit"))
-  fit_u <- glm(u ~ 1 + z1 + z2 + a + m, data = small_df, 
+  fit_y <- glm(y ~ 1 + (z1 + z2 + a + m + u)^5, data = small_df, 
+               family = binomial(link = "logit"))
+  fit_u <- glm(u ~ 1 + (z1 + z2 + a + m)^4, data = small_df, 
                family = binomial(link = "logit")) # weird but correct
-  fit_m <- glm(m ~ 1 + z1 + z2 + a, data = small_df, 
+  fit_m <- glm(m ~ 1 + (z1 + z2 + a)^3, data = small_df, 
                family = binomial(link = "logit"))
   
   # Calculate bias for every covariate pattern, summing across m and u
@@ -380,32 +380,26 @@ run_intx_corr <- function(df, small_df, am_intx) {
                          type = "response") -
                  predict(fit_u, newdata = cbind(cov_df, a = a_star, m = m),
                          type = "response")
-      diff_u0 <- (1 - predict(fit_u, newdata = cbind(cov_df, a = a, m = m),
-                              type = "response")) -
-                 (1 - predict(fit_u, newdata = cbind(cov_df, a = a_star, m = m),
-                              type = "response"))
-      p_m     <- m * predict(fit_m, newdata = cbind(cov_df, a = a_star), 
-                             type = "response") +
-                 (1 - m) * (1 - predict(fit_m, newdata = cbind(cov_df, a = a_star), 
-                                        type = "response"))
-      diff_u  <- (diff_u1 * u) + (diff_u0 * (1 - u))
+      p_m1     <- predict(fit_m, newdata = cbind(cov_df, a = a_star), 
+                          type = "response")
+      diff_u   <- u * diff_u1 + (1 - u) * (-diff_u1)
+      p_m      <- m * p_m1 + (1 - m) * (1 - p_m1)
       cov_df$B_nde <- cov_df$B_nde + diff_y * diff_u * p_m
     }
   }
   
   # Naive models can include A-M interaction
   # Zeros correspond to U
-  alpha_naive <- c(coef(glm(update.formula(formula_y, . ~ . - u), data = df,
+  alpha_naive <- c(coef(glm(update.formula(formula_y, . ~ . - u),
+                            data = df,
                             family = binomial(link = "logit"))), 0)
   beta_naive  <- c(coef(glm(m ~ 1 + z1 + z2 + a, data = df,
                             family = binomial(link = "logit"))), 0)
-  gamma_naive <- coef(glm(u ~ 1 + z1 + z2, data = df,
-                            family = binomial(link = "logit")))
-
+  
   naive_nder <- calculate_nder(params = NULL, 
                                alpha = alpha_naive, 
                                beta = beta_naive, 
-                               gamma = gamma_naive,
+                               gamma = c(0, 0, 0), # should not matter
                                u_ei = 0, am_intx = am_intx,
                                yu_strength = 0, mu_strength = 0)
   
@@ -466,6 +460,13 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
                                yu_strength = yu_strength,
                                mu_strength = mu_strength,
                                mean = TRUE)
+  truth_nder_fixed_u <- calculate_nder_fixed_u(params = NULL,
+                                               u_ei = params$u_ei,
+                                               am_intx = params$am_intx,
+                                               yu_strength = yu_strength,
+                                               mu_strength = mu_strength,
+                                               u_prime = calculate_u_prime(params),
+                                               mean = TRUE)
   
   # Run different corrections
   nder_uc <- run_uncorrected(dl$df, am_intx = 0, mean = TRUE)
@@ -486,6 +487,8 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
   cov_uc  <- check_coverage(ci = ci_uc, truth = truth_nder)
   cov_dg  <- check_coverage(ci = ci_dg, truth = truth_nder)
   cov_ix  <- check_coverage(ci = ci_ix, truth = truth_nder)
+  cov_dg_fixed  <- check_coverage(ci = ci_dg, truth = truth_nder_fixed_u)
+  cov_ix_fixed  <- check_coverage(ci = ci_ix, truth = truth_nder_fixed_u)
   width_uc <- get_ci_width(ci_uc)
   width_dg <- get_ci_width(ci_dg)
   width_ix <- get_ci_width(ci_ix)
@@ -493,22 +496,30 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
   if (result_type == "raw") {
     return(list(params = params, data_list = dl,
                 truth_nder = truth_nder,
+                truth_nder_fixed_u = truth_nder_fixed_u,
                 estimate = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
                 bias = c(uc = nder_uc - truth_nder,
                          dg = nder_dg - truth_nder,
-                         ix = nder_ix - truth_nder),
+                         ix = nder_ix - truth_nder,
+                         dg_fixed = nder_ix - truth_nder_fixed_u,
+                         ix_fixed = nder_ix - truth_nder_fixed_u),
                 ci = c(uc = ci_uc, dg = ci_dg, ix = ci_ix),
-                ci_cov = c(uc = cov_uc, dg = cov_dg, ix = cov_ix),
+                ci_cov = c(uc = cov_uc, dg = cov_dg, ix = cov_ix,
+                           dg_fixed = cov_dg_fixed, ix_fixed = cov_ix_fixed),
                 ci_width = c(uc = width_uc, dg = width_dg, ix = width_ix)))
   } else {
-    return(list(truth_nder = truth_nder,
+    return(list(truth_nder = truth_nder, 
+                truth_nder_fixed_u = truth_nder_fixed_u,
                 estimate = c(uc = nder_uc, dg = nder_dg, ix = nder_ix),
                 bias = c(uc = nder_uc - truth_nder,
                          dg = nder_dg - truth_nder,
-                         ix = nder_ix - truth_nder),
+                         ix = nder_ix - truth_nder,
+                         dg_fixed = nder_ix - truth_nder_fixed_u,
+                         ix_fixed = nder_ix - truth_nder_fixed_u),
                 ci = c(uc = ci_uc, dg = ci_dg, ix = ci_ix),
-                ci_cov = c(uc = cov_uc, dg = cov_dg, ix = cov_ix),
-                ci_width = c(uc = width_uc, dg = width_dg, ix = width_ix)))  
+                ci_cov = c(uc = cov_uc, dg = cov_dg, ix = cov_ix,
+                           dg_fixed = cov_dg_fixed, ix_fixed = cov_ix_fixed),
+                ci_width = c(uc = width_uc, dg = width_dg, ix = width_ix)))
   }
 }
 
@@ -622,3 +633,5 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
                 ci_width = c(gc = width_gc, gf = width_gf)))
   }
 }
+
+

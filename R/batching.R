@@ -51,6 +51,7 @@ process_clear_registry <- function(clear_existing, registry) {
 #' @param time_each Number of minutes for each job at the smallest n
 #' @param memory Memory to allocate at the smallest n
 #' @param max.concurrent.jobs Maximum number of jobs at the same time
+#' @param ... Additional parameters to pass to Stan
 #' @return None; jobs will be submitted and update in registry
 #' @export
 submit_bdf_jobs <- function(registry, transport, seed, 
@@ -63,7 +64,8 @@ submit_bdf_jobs <- function(registry, transport, seed,
                             time_each = 120,
                             memory = 4000,
                             n_ratio = 10,
-                            max.concurrent.jobs = 2000) {
+                            max.concurrent.jobs = 2000,
+                            ...) {
   
   process_clear_registry(clear_existing, registry)
   
@@ -85,7 +87,7 @@ submit_bdf_jobs <- function(registry, transport, seed,
                           small_params = NULL,
                           result_type = result_type,
                           n_ratio = n_ratio,
-                          iter = iter, chains = chains), 
+                          iter = iter, chains = chains, ...), 
          reg = registry)
   
   walltime <- 60 * time_each * chunk.size

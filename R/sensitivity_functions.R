@@ -557,6 +557,120 @@ calculate_nder <- function(params = NULL,
 
 
 
+#' Calculate u_prime as true underlying population average value for u
+#' 
+#' @param params List of true DGP
+#' @return Scalar mean u for the interaction bias correction eval
+#' @export
+calculate_u_prime <- function(params) {
+  xmat <- cbind(1, make_bl_types())
+  w_z <- ifelse(xmat$z1 == 1, params$pz1, 1 - params$pz1) * 
+         ifelse(xmat$z2 == 1, params$pz2, 1 - params$pz2)
+  lp <- as.matrix(xmat) %*% params$gamma
+  return(weighted.mean(plogis(lp), w = w_z))
+}
+
+
+
+#' Calculate randomized interventional analog to natural direct effect
+#' at a fixed level of u (u')
+#'
+#' Should not be used for exposure-induced U
+#'
+#' @param params List of parameters (optional)
+#' @param alpha Vector of Y regression coefficients (optional) 
+#' @param beta Vector of M regression coefficients (optional) 
+#' @param gamma Vector of U regression coefficients (optional)
+#' @param u_ei Whether U is exposure-induced (optional)
+#' @param am_intx Whether exposure-M interaction in outcome (optional)
+#' @param yu_strength U coefficient in Y regression (optional)
+#' @param mu_strength U coefficient in M regression (optional)
+#' @param z1 Vector containing levels of z1 covariate to evaluate conditional NDER
+#' @param z2 Vector containing levels of z2 covariate to evaluate conditional NDER
+#' @param u_prime Value at which to fix u
+#' @param mean Whether to average (defaults)
+#' @param weights Vector of weights for z1 and z2 combinations (optional). Default is to 
+#' give every combination equal weight
+#' @return Length-K vector of conditional NDERs, for each of K covariate patterns
+#' @export
+calculate_nder_fixed_u <- function(params = NULL, 
+                                   alpha = NULL, beta = NULL, gamma = NULL, 
+                                   u_ei = NULL, am_intx = NULL, 
+                                   yu_strength = NULL, mu_strength = NULL,
+                                   z1 = 0:1, z2 = 0:1, 
+                                   u_prime = NULL, 
+                                   mean = FALSE, weights = NULL) {
+  if (u_ei == 1) {
+    stop("rNDE has strange interpretation if U is exposure-induced!")
+  }
+  
+  if ((is.null(u_ei) | is.null(am_intx) | is.null(yu_strength) | 
+       is.null(mu_strength)) & (is.null(params))) {
+    stop("Need to specify u_ei, am_intx, yu_strength, and mu_strength if not 
+         supplying params")
+  }
+  
+  if (is.null(params)) {
+    params  <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
+    if (is.null(alpha)) {
+      alpha <- params$alpha
+    }
+    if (is.null(beta)) {
+      beta  <- params$beta
+    }
+    if (is.null(gamma)) {
+      gamma <- params$gamma
+    }
+  } else if (!is.null(params)) {
+    alpha <- params$alpha
+    beta  <- params$beta
+    gamma <- params$gamma
+  }
+  
+  # Make all possible combinations for provided z1, z2
+  df <- expand.grid(z1 = z1, z2 = z2, u_for_y = u_prime, m = 0:1)
+  bl_types <- make_bl_types()
+  bl_types$bl_type <- 1:NROW(bl_types)
+  if (mean == TRUE & is.null(weights)) {
+    bl_types$weights <- 1/NROW(bl_types)
+  } else if (!is.null(weights)) {
+    stopifnot(length(weights) == NROW(bl_types))
+    bl_types$weights <- weights
+  }
+  df <- merge(df, bl_types, by = c("z1", "z2"))
+  
+  # for randomized intervention on m (only matters in a = 0 world)
+  pm1_a0 <- plogis(make_x_m(df$z1, df$z2, a = 0, u = u_prime, "full") %*% beta)
+  pm_a0    <- ifelse(df$m == 1, pm1_a0, 1 - pm1_a0)
+  
+  # mean y for covariate/m/u combinations
+  ey_cf1 <- plogis(make_x_y(df$z1, df$z2, a = 1, df$m, df$u_for_y, "full", am_intx) 
+                   %*% alpha)
+  ey_cf2 <- plogis(make_x_y(df$z1, df$z2, a = 0, df$m, df$u_for_y, "full", am_intx)
+                   %*% alpha)
+  
+  # CF1 : E[Y(a = 1, u = u_prime, m = g(a = 0))]
+  w1 <- pm_a0
+  ECF1 <- sapply(bl_types$bl_type, function(type) {
+    weighted.mean(ey_cf1[df$bl_type == type], w = w1[df$bl_type == type])
+  })
+  
+  # CF2 : E[Y(a = 0, u = u_prime, m = g(a = 0))]
+  w2 <- pm_a0
+  ECF2 <- sapply(bl_types$bl_type, function(type) {
+    weighted.mean(ey_cf2[df$bl_type == type], w = w2[df$bl_type == type])
+  })
+  
+  # Return
+  if (mean == TRUE) {
+    return(weighted.mean(ECF1 - ECF2, w = bl_types$weights))
+  } else {
+    return(ECF1 - ECF2)
+  }
+}
+
+
+
 #' Calculate (r)NDE from Stan sensitivity analysis fit
 #' 
 #' Not simulation-based! Closed form, g-formula
