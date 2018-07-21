@@ -8,11 +8,16 @@ Maintainer: Leah Comment <leahcomment@g.harvard.edu>
 Description: This package fits parametric models for mediation and time-varying confounding using Stan.
 License: GPL (>=3)
 Depends: R (>= 3.3.0)
-Imports: rstan (>= 2.17.3), rstantools (>= 1.4.0), Rcpp (>= 0.12.15), methods, matrixStats, batchtools 
+Imports: rstan (>= 2.17.3), rstantools (>= 1.4.0), Rcpp (>= 0.12.15), 
+         methods, matrixStats, batchtools, utils, ggplot2, VGAM (>= 1.0.4)
 SystemRequirements: GNU make
-LinkingTo: StanHeaders (>= 2.17.2), rstan (>= 2.17.3), BH (>= 1.65.0.1), Rcpp (>= 0.12.15), RcppEigen (>= 0.3.3.3.1), VGAM (>= 1.0.4)
+LinkingTo: StanHeaders (>= 2.17.2), rstan (>= 2.17.3), BH (>= 1.65.0.1), 
+           Rcpp (>= 0.12.15), RcppEigen (>= 0.3.3.3.1)
 RoxygenNote: 6.0.1
 Suggests: knitr,
     rmarkdown,
-    testthat
+    testthat,
+    dplyr,
+    data.table,
+    reshape2
 VignetteBuilder: knitr

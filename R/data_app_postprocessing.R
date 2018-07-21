@@ -100,6 +100,12 @@ process_seer_raw <- function(seer_file_path, am_intx = 1) {
 
 #' Make arrays
 #' 
+#' @param Xmat_Y Design matrix for outcome regression
+#' @param Xmat_M Design matrix for mediator regression
+#' @param Xmat_U Design matrix for unmeasured confounder regression
+#' @param am_intx 0/1 indicator of exposure-mediator interaction
+#' @param n_patt Number of covariate patterns
+#' @param K_m Number of levels for mediator
 #' @return Named list containing arrays
 #' @export
 make_xy_xm_xu <- function(Xmat_Y, Xmat_M, Xmat_U, am_intx, n_patt, K_m) {
@@ -232,6 +238,9 @@ bayes_boot_weighted_mean <- function(statistic, counts) {
 
 #' Process data application stan fit to obtain posterior draws of mediation estimands
 #' 
+#' @param seer_file_path Path to SEER data
+#' @param stan_fit Stan fit from data application 
+#' @param am_intx Whether an exposure-mediator interaction was included
 #' @return Named list of mediation quantities from closed form g-formula approach
 #' @examples
 #' \dontrun{

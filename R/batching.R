@@ -50,6 +50,7 @@ process_clear_registry <- function(clear_existing, registry) {
 #' @param chunk.size How many jobs should be chunked together
 #' @param time_each Number of minutes for each job at the smallest n
 #' @param memory Memory to allocate at the smallest n
+#' @param n_ratio Ratio of main study n to external data n
 #' @param max.concurrent.jobs Maximum number of jobs at the same time
 #' @param ... Additional parameters to pass to Stan
 #' @return None; jobs will be submitted and update in registry
@@ -116,11 +117,11 @@ submit_bdf_jobs <- function(registry, transport, seed,
 #' @param am_intx Exposure-mediator flag values
 #' @param n Values for (big) sample sizes
 #' @param result_type Output type, from \code{\link{run_frequentist_replicate}}
-#' @param n_ratio 
 #' @param B Number of bootstrap samples for CI
 #' @param chunk.size How many jobs should be chunked together
 #' @param time_each Number of minutes for each job at the smallest n
 #' @param memory Memory to allocate at the smallest n
+#' @param n_ratio Ratio of main study n to external data n
 #' @param max.concurrent.jobs Maximum number of jobs at the same time
 #' @return None; jobs will be submitted and update in registry
 #' @export
@@ -239,10 +240,10 @@ combine_frequentist_reg_results <- function(registry) {
   shell <- make_simregdf_shell(registry = registry, registry_type = "freq")
   for (i in 1:NROW(shell)) {
     rdsname <- paste0(path.expand(registry$file.dir), "/results/", i, ".rds")
-    is_done <- (!is.na(getJobStatus(id = i, reg = registry)$done)) && 
+    is_done <- (!is.na(getJobStatus(ids = i, reg = registry)$done)) && 
                (file.exists(rdsname))
     if (is_done) {
-      job_res <- batchtools::loadResult(id = i, reg = registry)
+      job_res <- batchtools::loadResult(ids = i, reg = registry)
       shell[i, "nder_truth"] <- job_res$truth_nder
       for (suffix in c("uc", "dg", "ix")) {
         estimate_name <- paste0("nder_", suffix)
@@ -270,10 +271,10 @@ combine_bdf_reg_results <- function(registry) {
   shell <- make_simregdf_shell(registry = registry, registry_type = "bdf")
   for (i in 1:NROW(shell)) {
     rdsname <- paste0(path.expand(registry$file.dir), "/results/", i, ".rds")
-    is_done <- (!is.na(getJobStatus(id = i, reg = registry)$done)) && 
+    is_done <- (!is.na(getJobStatus(ids = i, reg = registry)$done)) && 
       (file.exists(rdsname))
     if (is_done) {
-      job_res <- batchtools::loadResult(id = i, reg = registry)
+      job_res <- batchtools::loadResult(ids = i, reg = registry)
       shell[i, "nder_truth"] <- job_res$truth_nder
       for (suffix in c("gc", "gf")) {
         estimate_name <- paste0("nder_", suffix)
