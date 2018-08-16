@@ -566,7 +566,12 @@ calculate_u_prime <- function(params) {
   xmat <- cbind(1, make_bl_types())
   w_z <- ifelse(xmat$z1 == 1, params$pz1, 1 - params$pz1) * 
          ifelse(xmat$z2 == 1, params$pz2, 1 - params$pz2)
-  lp <- as.matrix(xmat) %*% params$gamma
+  if (params$u_ei == 1) {
+    # defaults to a = 0
+    lp <- as.matrix(xmat) %*% head(params$gamma, length(params$gamma) - 1)
+  } else if (params$u_ei == 0) {
+    lp <- as.matrix(xmat) %*% params$gamma
+  }
   return(weighted.mean(plogis(lp), w = w_z))
 }
 
@@ -601,7 +606,7 @@ calculate_nder_fixed_u <- function(params = NULL,
                                    u_prime = NULL, 
                                    mean = FALSE, weights = NULL) {
   if (u_ei == 1) {
-    stop("rNDE has strange interpretation if U is exposure-induced!")
+    warning("rNDE has strange interpretation if U is exposure-induced!")
   }
   
   if ((is.null(u_ei) | is.null(am_intx) | is.null(yu_strength) | 
