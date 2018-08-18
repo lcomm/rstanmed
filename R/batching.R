@@ -243,7 +243,7 @@ combine_frequentist_reg_results <- function(registry) {
     is_done <- (!is.na(getJobStatus(ids = i, reg = registry)$done)) && 
                (file.exists(rdsname))
     if (is_done) {
-      job_res <- batchtools::loadResult(ids = i, reg = registry)
+      job_res <- batchtools::loadResult(id = i, reg = registry)
       shell[i, "nder_truth"] <- job_res$truth_nder
       for (suffix in c("uc", "dg", "ix")) {
         estimate_name <- paste0("nder_", suffix)
@@ -274,7 +274,7 @@ combine_bdf_reg_results <- function(registry) {
     is_done <- (!is.na(getJobStatus(ids = i, reg = registry)$done)) && 
       (file.exists(rdsname))
     if (is_done) {
-      job_res <- batchtools::loadResult(ids = i, reg = registry)
+      job_res <- batchtools::loadResult(id = i, reg = registry)
       shell[i, "nder_truth"] <- job_res$truth_nder
       for (suffix in c("gc", "gf")) {
         estimate_name <- paste0("nder_", suffix)
@@ -290,3 +290,31 @@ combine_bdf_reg_results <- function(registry) {
   }
   return(shell)
 }
+
+
+
+#' Process simulation results in a batchtools registry and save combined file
+#' 
+#' @param reg_path Path to registry (should end in a slash)
+#' @param rtype Registry type, Bayesian ("b") or frequentist ("f")
+#' @param ttype Transportability type (e.g., "1p5" or "0_1p5")
+#' @param n Main sample size
+#' @param save_path Path for saving result file (should end in a slash)
+#' @return None
+#' @export
+process_sim_registry <- function(reg_path, rtype, n, ttype, 
+                                 save_path = reg_path) {
+  
+  full_reg_path  <- paste0(reg_path, "registry_", rtype, n, "_", ttype)
+  full_save_path <- paste0(save_path, "result_", rtype, n, "_", ttype, ".rds")
+  
+  registry <- batchtools::loadRegistry(full_reg_path, writeable = FALSE)
+  if (rtype == "f") {
+    result <- combine_frequentist_reg_results(registry = registry)
+  } else if (rtype == "b") {
+    result <- combine_bdf_reg_results(registry = registry)
+  }
+  saveRDS(result, file = full_save_path)
+}
+
+
