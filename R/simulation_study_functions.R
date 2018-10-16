@@ -363,28 +363,43 @@ run_intx_corr <- function(df, small_df, am_intx) {
   # Fit models to calculate B_nde
   fit_y <- glm(y ~ 1 + (z1 + z2 + a + m + u)^5, data = small_df, 
                family = binomial(link = "logit"))
-  fit_u <- glm(u ~ 1 + (z1 + z2 + a + m)^4, data = small_df, 
-               family = binomial(link = "logit")) # weird but correct
-  fit_m <- glm(m ~ 1 + (z1 + z2 + a)^3, data = small_df, 
-               family = binomial(link = "logit"))
+  fit_u_cond <- glm(u ~ 1 + (z1 + z2 + a + m)^4, data = small_df, 
+                family = binomial(link = "logit")) # weird but correct
+  fit_u_marg <- glm(u ~ 1 + (z1 + z2)^2, data = small_df, 
+                    family = binomial(link = "logit"))
+  fit_m_cond <- glm(m ~ 1 + (z1 + z2 + a + u)^4, data = small_df, 
+                    family = binomial(link = "logit"))
+  fit_m_marg <- glm(m ~ 1 + (z1 + z2 + a)^3, data = small_df, 
+                    family = binomial(link = "logit"))
   
   # Calculate bias for every covariate pattern, summing across m and u
   cov_df$B_nde <- 0
   for (m in 0:1) {
     for (u in 0:1) {
-      diff_y  <- predict(fit_y, newdata = cbind(cov_df, a = a, m = m, u = u), 
-                         type = "response") - 
-                 predict(fit_y, newdata = cbind(cov_df, a = a, m = m, u = u_prime), 
-                         type = "response")
-      diff_u1 <- predict(fit_u, newdata = cbind(cov_df, a = a, m = m),
-                         type = "response") -
-                 predict(fit_u, newdata = cbind(cov_df, a = a_star, m = m),
-                         type = "response")
-      p_m1     <- predict(fit_m, newdata = cbind(cov_df, a = a_star), 
-                          type = "response")
-      diff_u   <- u * diff_u1 + (1 - u) * (-diff_u1)
-      p_m      <- m * p_m1 + (1 - m) * (1 - p_m1)
-      cov_df$B_nde <- cov_df$B_nde + diff_y * diff_u * p_m
+      ey1 <- predict(fit_y, newdata = cbind(cov_df, a = a, m = m, u = u), 
+                    type = "response")
+      ey2 <- predict(fit_y, newdata = cbind(cov_df, a = a_star, m = m, u = u), 
+                    type = "response")
+      qm3 <- predict(fit_m_marg, newdata = cbind(cov_df, a = a_star), 
+                     type = "response")
+      pm3 <- m * qm3 + (1 - m) * (1 - qm3)
+      qm4 <- predict(fit_m_cond, newdata = cbind(cov_df, a = a_star, u = u), 
+                     type = "response")
+      pm4 <- m * qm4 + (1 - m) * (1 - qm4)
+      qu5 <- predict(fit_u_cond, newdata = cbind(cov_df, a = a, m = m), 
+                     type = "response")
+      pu5 <- u * qu5 + (1 - u) * (1 - qu5)
+      qu6 <- predict(fit_u_cond, newdata = cbind(cov_df, a = a_star, m = m), 
+                     type = "response")
+      pu6 <- u * qu6 + (1 - u) * (1 - qu6)
+      qu7 <- predict(fit_u_marg, newdata = cbind(cov_df), 
+                     type = "response")
+      pu7 <- u * qu7 + (1 - u) * (1 - qu7)
+      cov_df$B_nde <- cov_df$B_nde + 
+                      (ey1 * pu5 * pm3 
+                      - ey2 * pu6 * pm3
+                      - ey1 * pm4 * pu7 
+                      + ey2 * pm4 * pu7)
     }
   }
   

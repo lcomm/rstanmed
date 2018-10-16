@@ -238,3 +238,44 @@ run_data_app <- function(seer_file_path,
   return(bayes_res)
 }
 
+
+
+#' Calculate the total effect for the data application
+#' 
+#' The total effect here is the existing racial disparity
+#' 
+#' @param seer_file_path Path to SEER data
+#' @return Scalar frequentist estimate of the total black-white disparity in 
+#' 5-year survival
+#' @export
+calculate_total_effect <- function(seer_file_path) {
+  
+  # Read in SEER
+  seer <- read.table(seer_file_path)
+  
+  # Make middle age category the reference
+  seer$age_cat <- relevel(as.factor(seer$age_cat), ref = 2)
+  seer$female  <- ifelse(seer$female == 2, 1, 0)
+  
+  # Collapse regions to match CanCors
+  seer$region[seer$region == 2] <- 1
+  seer$region  <- factor(seer$region,
+                         labels = c("Other", "South", "West"))
+  
+  # Make formula for outcome regression and fit logistic regression model
+  formula_outcome <- formula(fiveyearsurv ~ female + as.factor(age_cat) + 
+                               as.factor(region) + black)
+  fit_y <- glm(formula_outcome, data = seer, 
+               family = binomial(link = "logit"))
+  
+  # Calculate individual-level predictions for marginalization over confounders
+  seer_a1 <- seer_a0 <- seer
+  seer_a0$black <- 0
+  seer_a1$black <- 1
+  te_indiv <- predict(fit_y, newdata = seer_a1, type = "response") - 
+    predict(fit_y, newdata = seer_a0, type = "response")
+  te <- mean(te_indiv)
+  
+  return(te)
+}
+

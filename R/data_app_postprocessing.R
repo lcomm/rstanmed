@@ -10,14 +10,14 @@ row_softmax <- function(x){
 
 
 
-#' Process SEER data to make design matrices and counts for weighting
+#' Calculate the naive residual disparity for data application
 #' 
 #' @param seer_file_path Path to raw SEER txt file
 #' @param am_intx Whether to include A * M interaction in Y model
-#' @return Named list of design matrices Xmat_U, ..., Xmat_Y with K unique rows, 
-#' frequency counts for each of the K covariate pattern, number of unique 
-#' patterns, and number of unique values for the mediator (K_m) 
-process_seer_raw <- function(seer_file_path, am_intx = 1) {
+#' @param B Number of bootstrap samples to take
+#' @return Vector of B residual disparities
+#' @export
+calculate_data_app_naive <- function(seer_file_path, am_intx = 1, B = 2000) {
   
   # Read in seer from file path, and set 
   seer       <- read.table(path.expand(seer_file_path))
@@ -51,49 +51,41 @@ process_seer_raw <- function(seer_file_path, am_intx = 1) {
                                  + black + as.factor(stage_cat))
   }
   
-  # These samples gets overwritten - just ensure the model matrices work
+  # These actually get used now, except for U
   seer[["Y"]] <- seer[[outcome]]
-  seer[["M"]] <- seer[[mediator]] <- sample(1:K_m, size = n, replace = TRUE)
+  seer[["M"]] <- seer[[mediator]]
   seer[["U"]] <- sample(0:1, size = n, replace = TRUE) # gets overwritten
-  seer[["A"]] <- seer[[tx]] <- sample(0:1, size = n, replace = TRUE)
+  seer[["A"]] <- seer[[tx]] #<- sample(0:1, size = n, replace = TRUE)
   
   # Construct formulas
-  formulas$u_noU      <- formulas$unmeasured
-  formulas$unmeasured <- update.formula(formulas$unmeasured, U ~ .)
   formulas$mediator   <- update.formula(formulas$mediator, M ~ .)
   formulas$outcome    <- update.formula(formulas$outcome, Y ~ .)
-  formulas$mediatorU  <- update.formula(formulas$mediator, . ~ . + U)
-  formulas$outcomeU   <- update.formula(formulas$outcome, . ~ . + U)
   
-  # Isolate baseline covariates from mediator regression model
-  covs <- attr(terms(formulas$mediator), "term.labels")
-  formulas$baseline <- as.formula(paste("~", paste(covs[covs != tx], 
-                                                   collapse  = " + ")))
+  nder_naive <- rep(NA, B)
+  for (b in 1:B) {
+    new_booted <- booted <- boot_samp(seer)
+    fit_m <- VGAM::vglm(formulas$mediator, family = multinomial(refLevel = 1), 
+                        data = booted)#, control = vglm.control(maxit = 500,
+                                       #                       stepsize = 0.7))
+    fit_y <- glm(formulas$outcome, family = binomial(link = "logit"), 
+                 data = booted)
+    
+    new_booted$A <- new_booted$black <- 0
+    pm_a0 <- VGAM::predict(fit_m, newdata = new_booted, type = "response")
+    
+    nder_indiv <- rep(0, NROW(booted))
+    for (m in 1:4) {
+      new_booted$M <- new_booted$stage_cat <- m
+      new_booted$A <- new_booted$black <- 1
+      py10 <- stats::predict(fit_y, newdata = new_booted, type = "response")
+      new_booted$A <- new_booted$black <- 0
+      py00 <- stats::predict(fit_y, newdata = new_booted, type = "response")
+      nder_indiv <- nder_indiv + unname((py10 - py00) * pm_a0[, m])
+    }
+    nder_naive[b] <- mean(nder_indiv)
+  }
   
-  # Simplify into unique patterns for Bayesian bootstrap
-  full_bl <- cbind(count = 1, model.matrix(formulas$baseline, data = seer))
-  all_counts <- aggregate(count ~ ., data = full_bl, FUN = sum)
-  patts <- unique(full_bl[, -1])
-  patts_with_counts <- merge(patts, all_counts, sort = FALSE)
-  counts <- patts_with_counts$count
-  n_patt <- nrow(patts)
-  
-  # Make shell design matrices for unique covariate patterns
-  Xmat_Y <- matrix(NA,
-                   ncol = ncol(model.matrix(formulas$outcomeU, seer)),
-                   nrow = nrow(patts))
-  Xmat_U <- matrix(NA,
-                   ncol = ncol(model.matrix(formulas$unmeasured, seer)),
-                   nrow = nrow(patts))
-  Xmat_M <- matrix(NA,
-                   ncol = ncol(model.matrix(formulas$mediatorU, seer)),
-                   nrow = nrow(patts))
-  Xmat_Y[1:nrow(patts), 1:ncol(patts)] <- patts
-  Xmat_U[1:nrow(patts), 1:ncol(patts)] <- patts
-  Xmat_M[1:nrow(patts), 1:ncol(patts)] <- patts
-  
-  return(list(Xmat_Y = Xmat_Y, Xmat_M = Xmat_M, Xmat_U = Xmat_U, 
-              counts = counts, n_patt = n_patt, K_m = K_m))
+  return(nder_naive)
 }
 
 
@@ -232,6 +224,94 @@ bayes_boot_weighted_mean <- function(statistic, counts) {
   w <- sapply(counts, FUN = function(x) rgamma(n = 1, shape = x, scale = 1))
   w <- w / sum(w)
   return(weighted.mean(statistic, w = w))
+}
+
+
+
+#' Process SEER data to make design matrices and counts for weighting
+#' 
+#' @param seer_file_path Path to raw SEER txt file
+#' @param am_intx Whether to include A * M interaction in Y model
+#' @return Named list of design matrices Xmat_U, ..., Xmat_Y with K unique rows, 
+#' frequency counts for each of the K covariate pattern, number of unique 
+#' patterns, and number of unique values for the mediator (K_m) 
+process_seer_raw <- function(seer_file_path, am_intx = 1) {
+  
+  # Read in seer from file path, and set 
+  seer       <- read.table(path.expand(seer_file_path))
+  mediator   <- "stage_cat"
+  outcome    <- "fiveyearsurv" 
+  tx         <- "black"
+  unmeasured <- "pov"
+  n          <- NROW(seer)
+  K_m        <- length(unique(seer[[mediator]]))
+  
+  # Make middle age category the reference
+  seer$age_cat <- relevel(as.factor(seer$age_cat), ref = 2)
+  seer$female  <- ifelse(seer$female == 2, 1, 0)
+  
+  # Collapse regions to match CanCors
+  seer$region[seer$region == 2] <- 1
+  seer$region  <- factor(seer$region,
+                         labels = c("Other", "South", "West"))
+  
+  formulas <- list()
+  formulas$mediator   <- formula(~ female + as.factor(age_cat) + as.factor(region) 
+                                 + black)
+  formulas$unmeasured <- formula(~ female + as.factor(age_cat) + as.factor(region) 
+                                 + black)
+  if (am_intx) {
+    formulas$outcome  <- formula(~ female + as.factor(age_cat) + as.factor(region) 
+                                 + black + as.factor(stage_cat)
+                                 + black*as.factor(stage_cat))
+  } else {
+    formulas$outcome  <- formula(~ female + as.factor(age_cat) + as.factor(region) 
+                                 + black + as.factor(stage_cat))
+  }
+  
+  # These samples gets overwritten - just ensure the model matrices work
+  seer[["Y"]] <- seer[[outcome]]
+  seer[["M"]] <- seer[[mediator]] <- sample(1:K_m, size = n, replace = TRUE)
+  seer[["U"]] <- sample(0:1, size = n, replace = TRUE) # gets overwritten
+  seer[["A"]] <- seer[[tx]] <- sample(0:1, size = n, replace = TRUE)
+  
+  # Construct formulas
+  formulas$u_noU      <- formulas$unmeasured
+  formulas$unmeasured <- update.formula(formulas$unmeasured, U ~ .)
+  formulas$mediator   <- update.formula(formulas$mediator, M ~ .)
+  formulas$outcome    <- update.formula(formulas$outcome, Y ~ .)
+  formulas$mediatorU  <- update.formula(formulas$mediator, . ~ . + U)
+  formulas$outcomeU   <- update.formula(formulas$outcome, . ~ . + U)
+  
+  # Isolate baseline covariates from mediator regression model
+  covs <- attr(terms(formulas$mediator), "term.labels")
+  formulas$baseline <- as.formula(paste("~", paste(covs[covs != tx], 
+                                                   collapse  = " + ")))
+  
+  # Simplify into unique patterns for Bayesian bootstrap
+  full_bl <- cbind(count = 1, model.matrix(formulas$baseline, data = seer))
+  all_counts <- aggregate(count ~ ., data = full_bl, FUN = sum)
+  patts <- unique(full_bl[, -1])
+  patts_with_counts <- merge(patts, all_counts, sort = FALSE)
+  counts <- patts_with_counts$count
+  n_patt <- nrow(patts)
+  
+  # Make shell design matrices for unique covariate patterns
+  Xmat_Y <- matrix(NA,
+                   ncol = ncol(model.matrix(formulas$outcomeU, seer)),
+                   nrow = nrow(patts))
+  Xmat_U <- matrix(NA,
+                   ncol = ncol(model.matrix(formulas$unmeasured, seer)),
+                   nrow = nrow(patts))
+  Xmat_M <- matrix(NA,
+                   ncol = ncol(model.matrix(formulas$mediatorU, seer)),
+                   nrow = nrow(patts))
+  Xmat_Y[1:nrow(patts), 1:ncol(patts)] <- patts
+  Xmat_U[1:nrow(patts), 1:ncol(patts)] <- patts
+  Xmat_M[1:nrow(patts), 1:ncol(patts)] <- patts
+  
+  return(list(Xmat_Y = Xmat_Y, Xmat_M = Xmat_M, Xmat_U = Xmat_U, 
+              counts = counts, n_patt = n_patt, K_m = K_m))
 }
 
 
