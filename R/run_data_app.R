@@ -273,7 +273,7 @@ calculate_total_effect <- function(seer_file_path) {
   seer_a0$black <- 0
   seer_a1$black <- 1
   te_indiv <- predict(fit_y, newdata = seer_a1, type = "response") - 
-    predict(fit_y, newdata = seer_a0, type = "response")
+              predict(fit_y, newdata = seer_a0, type = "response")
   te <- mean(te_indiv)
   
   return(te)
