@@ -8,7 +8,7 @@ data {
     int<lower=2> D_m;                   // design matrix dimension, M model
     int<lower=2> D_y;                   // design matrix dimension, Y model
     int<lower=2> D_u;                   // design matrix dimension, U model
-    int<lower=1> N;                     // number of observations
+    int<lower=1> N;                     // number of unique observation types
     int<lower=0,upper=1> am_intx;       // 0/1 exposure-mediator interaction
     // DESIGN MATRICES
     matrix[N, D_m] x_mu1;            // design matrix, M model if U = 1
@@ -26,6 +26,9 @@ data {
     // OUTCOME DATA
     int<lower=1, upper=K_m> m[N];       // observations of mediator M
     int<lower=0, upper=1> y[N];         // observations of outcome Y
+    // WEIGHTS
+    int<lower=1> N_tot;                 // number of total observations
+    vector[N] w;               // number of times data pattern is observed
 }
 transformed data {
     row_vector[D_m] zs;
@@ -113,14 +116,11 @@ model {
 
         // joint (M,Y) log-probabilities, marginal over U
         ll_marg[n] = log_sum_exp(x0, x1);
-        
     }
     
     // Add likelihood to target
-    for (n in 1:N) {
-        target += ll_marg[n];
-    }
-
+    target += dot_product(w, ll_marg);
+    
     /** Priors **/
     coef_y_unscaled ~ normal(0, 1);
     coef_u_unscaled ~ normal(0, 1);
@@ -132,5 +132,6 @@ generated quantities {
   vector[3] meffects;
   meffects = colMeans(sim_ceffects_mcat_rng(alpha, beta, gamma, u_ei, 
                                             x_y, x_m, x_u, 
-                                            am_intx, K_m, mean_only));
+                                            am_intx, K_m, mean_only,
+                                            N, N_tot, w));
 }

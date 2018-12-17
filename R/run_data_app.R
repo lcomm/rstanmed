@@ -88,7 +88,6 @@ run_stan_BSA <- function(big_df, small_df,
   small_df[["U"]] <- small_df[[unmeasured]]
   big_df[["Y"]]   <- big_df[[outcome]]
   big_df[["M"]]   <- big_df[[mediator]]
-  big_df[["U"]]   <- NA
   
   # Update formulas with shortcut outcome name and add U to other formulas
   formulas$u_noU      <- formulas$unmeasured
@@ -104,11 +103,19 @@ run_stan_BSA <- function(big_df, small_df,
                                                    collapse  = " + ")))
   
   # Build design matrices
+  # Build aggregation and weighting objects
+  N_tot <- NROW(big_df)
+  cat(N_tot)
+  big_df$w <- 1
+  big_df <- aggregate(w ~ ., data = big_df, FUN = sum)
+  big_df[["U"]] <- NA
   Xmat_M  <- model.matrix(formulas$mediator, big_df)
   Xmat_Y  <- model.matrix(formulas$outcome, big_df)
   Xmat_U  <- model.matrix(formulas$u_noU, big_df)
   Xmat_bl <- model.matrix(formulas$baseline, big_df)
   N       <- nrow(Xmat_Y)
+  cat(" ")
+  cat(N)
   
   # Construct priors
   priors <- make_da_priors(small_df, formulas, inf_fact = inf_fact)
@@ -134,7 +141,9 @@ run_stan_BSA <- function(big_df, small_df,
                     m_coef_y = priors$outcome[["mean"]],
                     v_coef_y = priors$outcome[["vcov"]],
                     m = big_df[[mediator]],
-                    y = big_df[[outcome]])
+                    y = big_df[[outcome]],
+                    N_tot = N_tot,
+                    w = big_df[["w"]])
   
   # Run
   samples <- rstan::sampling(stanmodels$mediation_model_ncp, 
@@ -177,7 +186,7 @@ run_data_app <- function(seer_file_path,
                          am_intx = 1,
                          inf_fact = 100,
                          chains = 4, iter = 2000, seed = 42,
-                         auto_write = TRUE, mc.cores = 4) {
+                         auto_write = TRUE, mc.cores = 4, ...) {
   
   rstan::rstan_options(auto_write = auto_write)
   options(mc.cores = mc.cores)
@@ -233,7 +242,8 @@ run_data_app <- function(seer_file_path,
                             inf_fact = inf_fact,
                             chains = chains, iter = iter, seed = seed,
                             sample_file = samples_file_path,
-                            cores = mc.cores)
+                            cores = mc.cores,
+                            ...)
   
   return(bayes_res)
 }

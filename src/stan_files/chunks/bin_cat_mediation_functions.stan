@@ -183,30 +183,35 @@
   // See \code{\link{ua_rng}} for details on coefficient order.
   // @param u_ei 0/1 indicator for whether U is exposure-induced. See 
   // \code{\link{ua_rng}} for details.
-  // @param x_y Design matrix with N rows for Y regression model.
-  // @param x_m Design matrix with N rows for Y regression model.
-  // @param x_u Design matrix with N rows for U regression model.
+  // @param x_y Design matrix with N rows for Y regression model 
+  // (or fewer rows, if weighted).
+  // @param x_m Design matrix with N rows for Y regression model
+  // (or fewer rows, if weighted).
+  // @param x_u Design matrix with N rows for U regression model
   // @param mean_only 0/1 indicator for whether expected values of the potential
   // outcomes should be returned (1) or simulated values (0)
-  // @return N x 3 matrix of means or differences in simulated values. Columns
-  // are NDER, NIER, and TER, rows are for bootstrapped observations.
+  // @param N Number of unique observation types
+  // @param N_tot Number of total observations 
+  // @param w Vector of weights that sums to N_tot
+  // @return N_tot x 3 matrix of means or differences in simulated values. 
+  // Columns are NDER, NIER, and TER, rows are for bootstrapped observations.
   // @export
   matrix sim_ceffects_mcat_rng(vector alpha, matrix beta, vector gamma, int u_ei,
                                matrix x_y, matrix x_m, matrix x_u, 
-                               int am_intx, int K_m, int mean_only) {
-  // TODO: cleaner bootstrap
-  int N = rows(x_y);
-  vector[N] boot_probs = rep_vector(1.0/N, N);
+                               int am_intx, int K_m, int mean_only, 
+                               int N, int N_tot,
+                               vector w) {
+  vector[N] boot_probs = w ./ sum(w);
   int row_i;
-  matrix[N, 3] ceffects;
-  matrix[N, 4] quartet;
-  matrix[N, cols(x_y)] x_ynew;
-  matrix[N, cols(x_m)] x_mnew;
-  matrix[N, cols(x_u)] x_unew;
+  matrix[N_tot, 3] ceffects;
+  matrix[N_tot, 4] quartet;
+  matrix[N_tot, cols(x_y)] x_ynew;
+  matrix[N_tot, cols(x_m)] x_mnew;
+  matrix[N_tot, cols(x_u)] x_unew;
   
   // make vector of indices for the bootstrap sample
   // make "new design matrices"
-  for (n in 1:N) {
+  for (n in 1:N_tot) {
     row_i = categorical_rng(boot_probs);
     x_ynew[n,] = x_y[row_i,];
     x_mnew[n,] = x_m[row_i,];
