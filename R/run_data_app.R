@@ -142,7 +142,6 @@ run_stan_BSA <- function(big_df, small_df,
                     v_coef_y = priors$outcome[["vcov"]],
                     m = big_df[[mediator]],
                     y = big_df[[outcome]],
-                    N_tot = N_tot,
                     w = big_df[["w"]])
   
   # Run

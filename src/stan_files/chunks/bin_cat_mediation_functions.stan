@@ -43,7 +43,7 @@
   * return Length-N vector of simulated values for M_a
   **/
   int[] ma_cat_rng(matrix beta, matrix x_m, vector u, int a) {
-    //TODO(LCOMM): update to categorical (done but not checked)
+    // Updated for categorical
     int N = rows(x_m);
     int P_m = cols(beta);
     int K_m = rows(beta);
@@ -81,7 +81,7 @@
   **/
   vector ya_mcat_rng(vector alpha, matrix x_y, int[] m, vector u, int a, 
                      int am_intx, int K_m, int mean_only) {
-    //TODO(LCOMM): change for categorical
+    // Updated for categorical
     int N = rows(x_y);
     int P_y = cols(x_y) + 1;
     vector[N] ya;
@@ -92,7 +92,9 @@
     real alpha_u = alpha[P_y];
     alpha_zeroed[a_index:(P_y - 1)] = rep_vector(0, (P_y - a_index));
     
-    lp = x_y * alpha_zeroed + a * alpha_a + u * alpha_u; // still need m and a * m
+    // this quantity still needs m and a * m components
+    // (will be added within loop)
+    lp = x_y * alpha_zeroed + a * alpha_a + u * alpha_u; 
     
     for (n in 1:N) {
       // add components for m and a * m interaction only if necessary
@@ -183,48 +185,30 @@
   // See \code{\link{ua_rng}} for details on coefficient order.
   // @param u_ei 0/1 indicator for whether U is exposure-induced. See 
   // \code{\link{ua_rng}} for details.
-  // @param x_y Design matrix with N rows for Y regression model 
-  // (or fewer rows, if weighted).
-  // @param x_m Design matrix with N rows for Y regression model
-  // (or fewer rows, if weighted).
-  // @param x_u Design matrix with N rows for U regression model
+  // @param x_y Uncollapsed design matrix with N rows for Y regression model. 
+  // @param x_m Uncollapsed design matrix with N rows for Y regression model.
+  // @param x_u Uncollapsed design matrix with N rows for U regression model.
   // @param mean_only 0/1 indicator for whether expected values of the potential
   // outcomes should be returned (1) or simulated values (0)
-  // @param N Number of unique observation types
-  // @param N_tot Number of total observations 
-  // @param w Vector of weights that sums to N_tot
-  // @return N_tot x 3 matrix of means or differences in simulated values. 
-  // Columns are NDER, NIER, and TER, rows are for bootstrapped observations.
+  // @return N x 3 matrix of means or differences in simulated values, where
+  // N is the number of rows in uncollapsed design matrix
+  // Columns are NDER, NIER, and TER, rows are for uncollapsed observations.
   // @export
   matrix sim_ceffects_mcat_rng(vector alpha, matrix beta, vector gamma, int u_ei,
                                matrix x_y, matrix x_m, matrix x_u, 
-                               int am_intx, int K_m, int mean_only, 
-                               int N, int N_tot,
-                               vector w) {
-  vector[N] boot_probs = w ./ sum(w);
-  int row_i;
-  matrix[N_tot, 3] ceffects;
-  matrix[N_tot, 4] quartet;
-  matrix[N_tot, cols(x_y)] x_ynew;
-  matrix[N_tot, cols(x_m)] x_mnew;
-  matrix[N_tot, cols(x_u)] x_unew;
-  
-  // make vector of indices for the bootstrap sample
-  // make "new design matrices"
-  for (n in 1:N_tot) {
-    row_i = categorical_rng(boot_probs);
-    x_ynew[n,] = x_y[row_i,];
-    x_mnew[n,] = x_m[row_i,];
-    x_unew[n,] = x_u[row_i,];
-  }
-  
+                               int am_intx, int K_m, int mean_only) {
+  int N = rows(x_y);
+  matrix[N, 3] ceffects;
+  matrix[N, 4] quartet;
+
   // get counterfactuals (or mean of counterfactuals)  
-  quartet = quartet_mcat_rng(alpha, beta, gamma, u_ei, x_ynew, x_mnew, x_unew, 
+  quartet = quartet_mcat_rng(alpha, beta, gamma, u_ei, x_y, x_m, x_u, 
                              am_intx, K_m, mean_only);
   ceffects[,1] = quartet[,3] - quartet[,1]; // direct effect
   ceffects[,2] = quartet[,4] - quartet[,3]; // indirect effect
   ceffects[,3] = quartet[,4] - quartet[,1]; // total effect
   
   return ceffects;
-  }
+}
 
+  

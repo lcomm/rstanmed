@@ -27,11 +27,10 @@ data {
     int<lower=1, upper=K_m> m[N];       // observations of mediator M
     int<lower=0, upper=1> y[N];         // observations of outcome Y
     // WEIGHTS
-    int<lower=1> N_tot;                 // number of total observations
-    vector[N] w;               // number of times data pattern is observed
+    int w[N];                        // number of times data pattern is observed
 }
 transformed data {
-    row_vector[D_m] zs;
+    row_vector[D_m] zs = rep_row_vector(0, D_m);
     matrix[D_m*(K_m-1), D_m*(K_m-1)] beta_L  = cholesky_decompose(v_coef_m);
     matrix[D_y, D_y] alpha_L = cholesky_decompose(v_coef_y);
     matrix[D_u, D_u] gamma_L = cholesky_decompose(v_coef_u);
@@ -39,7 +38,12 @@ transformed data {
     int mean_only = 1;
     matrix[N, D_m - 1] x_m = x_mu1[, 1:(D_m - 1)];
     matrix[N, D_y - 1] x_y = x_yu1[, 1:(D_y - 1)];
-    zs = rep_row_vector(0, D_m);
+    int N_tot = sum(w);
+    vector[N] w_vec = to_vector(w);
+    // uncollapsed (i.e., non-count) versions of design matrices
+    matrix[N_tot, cols(x_y)] big_x_y = uncollapse_matrix(x_y, w);
+    matrix[N_tot, cols(x_m)] big_x_m = uncollapse_matrix(x_m, w);
+    matrix[N_tot, cols(x_u)] big_x_u = uncollapse_matrix(x_u, w);
 }
 parameters {
     vector[D_y] coef_y_unscaled;
@@ -119,7 +123,7 @@ model {
     }
     
     // Add likelihood to target
-    target += dot_product(w, ll_marg);
+    target += dot_product(w_vec, ll_marg);
     
     /** Priors **/
     coef_y_unscaled ~ normal(0, 1);
@@ -130,8 +134,7 @@ model {
 generated quantities {
 
   vector[3] meffects;
-  meffects = colMeans(sim_ceffects_mcat_rng(alpha, beta, gamma, u_ei, 
-                                            x_y, x_m, x_u, 
-                                            am_intx, K_m, mean_only,
-                                            N, N_tot, w));
+  meffects = bbootColMeans_rng(sim_ceffects_mcat_rng(alpha, beta, gamma, u_ei, 
+                                                     big_x_y, big_x_m, big_x_u, 
+                                                     am_intx, K_m, mean_only));
 }

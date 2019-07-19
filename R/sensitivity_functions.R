@@ -1,3 +1,44 @@
+#' Take a list with design matrices and outcomes and collapse it down to
+#' unique data observation patterns with observation weights \code{w}
+#' 
+#' Assumes that the primary outcome design matrix \code{do_list$designs$x_y} 
+#' contains M and all adjustment covariates that appear the U and M models.
+#' 
+#' @param do_list Named list containing \code{designs} list (with named matrices
+#' \code{x_u}, \code{x_m}, and \code{x_y}) and \code{outcomes} list (with named
+#' vectors \code{m} and \code{y}; see \code{\link{simulate_data}} for example
+#' expected input, but without the \code{df} element 
+#' @return Named list with \code{designs} sublist of collapsed design matrices,
+#' \code{outcomes} sublist of collapsed outcome vectors, and \code{w}, a vector 
+#' of integer counts of the observation frequency patterns. Note that individual
+#' design matrices and/or outcome vectors may contain duplicate elements.
+#' @export
+collapse_do_list <- function(do_list) {
+  
+  # Basic input checking
+  stopifnot(c("designs", "outcomes") %in% names(do_list))
+  stopifnot(c("x_u", "x_m", "x_y") %in% names(do_list$designs))
+  stopifnot(c("m", "y") %in% names(do_list$outcomes))
+  stopifnot("(i)" %in%  colnames(do_list$designs$x_y))
+  
+  # Merge to get unique covariate and outcome combinations
+  alltogether <- cbind(do_list$designs$x_y, y = do_list$outcomes$y)
+  
+  # Deduplicate and get count of observation patterns
+  deduped <- aggregate(`(i)` ~ ., data = alltogether, FUN = sum)
+  colnames(deduped)[colnames(deduped) == "(i)"] <- "count"
+  deduped[["(i)"]] <- 1
+  
+  return(list(designs = list(x_u = deduped[, colnames(do_list$designs$x_u)],
+                             x_m = deduped[, colnames(do_list$designs$x_m)],
+                             x_y = deduped[, colnames(do_list$designs$x_y)]),
+              outcomes = list(m = deduped[["m"]],
+                              y = deduped[["y"]]),
+              w = deduped$count))
+}
+
+
+
 #' Calculate bias of posterior mean in Stan parameter samples
 #' 
 #' @param estimate Length-P vector with each column corresponding to an estimate

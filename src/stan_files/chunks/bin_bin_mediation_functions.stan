@@ -175,38 +175,25 @@
   // See \code{\link{ua_rng}} for details on coefficient order.
   // @param u_ei 0/1 indicator for whether U is exposure-induced. See 
   // \code{\link{ua_rng}} for details.
-  // @param x_y Design matrix with N rows for Y regression model.
-  // @param x_m Design matrix with N rows for Y regression model.
-  // @param x_u Design matrix with N rows for U regression model.
+  // @param x_y Uncollapsed design matrix with N rows for Y regression model. 
+  // @param x_m Uncollapsed design matrix with N rows for Y regression model.
+  // @param x_u Uncollapsed design matrix with N rows for U regression model.
   // @param mean_only 0/1 indicator for whether expected values of the potential
   // outcomes should be returned (1) or simulated values (0)
-  // @return N x 3 matrix of means or differences in simulated values. Columns
-  // are NDER, NIER, and TER, rows are for bootstrapped observations.
+  // @return N x 3 matrix of means or differences in simulated values, where
+  // N is the number of rows in uncollapsed design matrix.
+  // Columns are NDER, NIER, and TER, rows are for uncollapsed observations.
   // @export
   matrix sim_ceffects_rng(vector alpha, vector beta, vector gamma, int u_ei,
                           matrix x_y, matrix x_m, matrix x_u, 
                           int am_intx, int mean_only) {
-  // TODO: cleaner bootstrap
+
   int N = rows(x_y);
-  vector[N] boot_probs = rep_vector(1.0 / N, N);
-  int row_i;
   matrix[N, 3] ceffects;
   matrix[N, 4] quartet;
-  matrix[N, cols(x_y)] x_ynew;
-  matrix[N, cols(x_m)] x_mnew;
-  matrix[N, cols(x_u)] x_unew;
-  
-  // make vector of indices for the bootstrap sample
-  // make "new design matrices"
-  for (n in 1:N) {
-    row_i = categorical_rng(boot_probs);
-    x_ynew[n,] = x_y[row_i,];
-    x_mnew[n,] = x_m[row_i,];
-    x_unew[n,] = x_u[row_i,];
-  }
   
   // get counterfactuals (or mean of counterfactuals)  
-  quartet = quartet_rng(alpha, beta, gamma, u_ei, x_ynew, x_mnew, x_unew, 
+  quartet = quartet_rng(alpha, beta, gamma, u_ei, x_y, x_m, x_u, 
                         am_intx, mean_only);
   ceffects[,1] = quartet[,3] - quartet[,1]; // direct effect
   ceffects[,2] = quartet[,4] - quartet[,3]; // indirect effect

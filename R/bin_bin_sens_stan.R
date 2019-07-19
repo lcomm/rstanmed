@@ -1,16 +1,19 @@
 #' Binary (M) - binary (Y) sensitivity analysis 
 #'
+#' (Does collapsing of design matrices internally)
+#'
 #' @param outcomes List of named regression outcomes (named m and y)
-#' @param designs List of named design matrices (named x_m, x_y, x_u) - with exposure
-#' named a
+#' @param designs List of named design matrices (named x_m, x_y, x_u) - 
+#' with exposure named a
 #' @param prior List of named prior means and variance-covariance matrices
 #' @param u_ei 0/1 Whether u is assumed to be exposure-induced
-#' @param am_intx 0/1 Whether exposure-mediation interaction is included in outcome model
+#' @param am_intx 0/1 Whether exposure-mediation interaction is included in 
+#' outcome model
 #' @param mean_only 0/1 Whether to sample outcomes or use means for mediation qtys
 #' @param ... Additional arguments passed to \code{rstan::sampling}
 #' @return an object of class `stanfit` returned by `rstan::sampling`
 #' @export
-bin_bin_sens_stan <- function(outcomes, designs, prior, 
+bin_bin_sens_stan <- function(outcomes, designs, prior,
                               u_ei = NULL,
                               am_intx = NULL,
                               mean_only = 1,
@@ -56,16 +59,20 @@ bin_bin_sens_stan <- function(outcomes, designs, prior,
     }
   }
   
+  # Collapsed version of design matrices and outcomes
+  cdo <- collapse_do_list(do_list = list(designs = designs, 
+                                         outcomes = outcomes))
+  
   out <- rstan::sampling(stanmodels$bin_bin_sens, 
-                         data=list(N = length(outcomes$y), 
-                                   P_m = ncol(designs$x_m) + 1,
-                                   P_y = ncol(designs$x_y) + 1,
-                                   P_u = ncol(designs$x_u),
-                                   y = outcomes$y,
-                                   m = outcomes$m,
-                                   x_m = designs$x_m,
-                                   x_y = designs$x_y,
-                                   x_u = designs$x_u,
+                         data=list(N = length(cdo$outcomes$y), 
+                                   P_m = ncol(cdo$designs$x_m) + 1,
+                                   P_y = ncol(cdo$designs$x_y) + 1,
+                                   P_u = ncol(cdo$designs$x_u),
+                                   y = cdo$outcomes$y,
+                                   m = cdo$outcomes$m,
+                                   x_m = cdo$designs$x_m,
+                                   x_y = cdo$designs$x_y,
+                                   x_u = cdo$designs$x_u,
                                    prior_mean_beta = prior[["beta"]][["mean"]],
                                    prior_mean_alpha = prior[["alpha"]][["mean"]],
                                    prior_mean_gamma = prior[["gamma"]][["mean"]],
@@ -74,7 +81,8 @@ bin_bin_sens_stan <- function(outcomes, designs, prior,
                                    prior_vcov_gamma = prior[["gamma"]][["vcov"]],
                                    u_ei = u_ei,
                                    am_intx = am_intx,
-                                   mean_only = mean_only),
+                                   mean_only = mean_only,
+                                   w = cdo$w),
                         ...)
   return(out)
 }
