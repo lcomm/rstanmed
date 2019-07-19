@@ -586,12 +586,11 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
   
   # Prior 
   #TODO(LCOMM): implement dd_control as function argument better
-  #TODO(LCOMM): default to prior variance inflation later
   if (is.null(dd_control)) {
     dd_control = list(small_n = floor(n / n_ratio), 
                       params = small_params,
                       partial_vague = TRUE,
-                      inflate_factor = 1)
+                      inflate_factor = 100)
   } else {
     if (!("small_n" %in% names(dd_control))) {
       dd_control$small_n <- floor(n / n_ratio)
@@ -603,7 +602,11 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
       dd_control$partial_vague <- TRUE
     }
     if (!("inflate_factor" %in% names(dd_control))) {
-      dd_control$inflate_factor <- 10
+      if (dd_control$partial_vague) {
+        dd_control$inflate_factor <- 100  
+      } else {
+        dd_control$inflate_factor <- 1
+      }
     }
   }
   prior <- make_prior(params = small_params, prior_type = "dd",
