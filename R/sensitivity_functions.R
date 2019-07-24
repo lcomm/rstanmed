@@ -29,11 +29,20 @@ collapse_do_list <- function(do_list) {
   colnames(deduped)[colnames(deduped) == "(i)"] <- "count"
   deduped[["(i)"]] <- 1
   
+  # Include U as a collapsed outcome iff it was provided initially
+  if ("u" %in% names(do_list$outcomes)) {
+    outcomes <- list(m = deduped[["m"]],
+                     y = deduped[["y"]],
+                     u = deduped[["u"]])
+  } else {
+    outcomes <- list(m = deduped[["m"]],
+                     y = deduped[["y"]])
+  }
+  
   return(list(designs = list(x_u = deduped[, colnames(do_list$designs$x_u)],
                              x_m = deduped[, colnames(do_list$designs$x_m)],
                              x_y = deduped[, colnames(do_list$designs$x_y)]),
-              outcomes = list(m = deduped[["m"]],
-                              y = deduped[["y"]]),
+              outcomes = outcomes,
               w = deduped$count))
 }
 
@@ -374,17 +383,19 @@ make_dd_prior <- function(small_data, partial_vague, inflate_factor = NULL) {
 #' @param params List of parameters
 #' @param prior_type Variance type: unit variance ("unit"), informative priors 
 #' on non-identifiable parameters ("partial"), strong prior information 
-#' ("strict"), or data-driven ("dd") based on external or simulated data set
+#' ("strict"), data-driven ("dd") based on external or simulated data set, or
+#' data pooling/power prior ("pp") based on the external or simulated data set
 #' @param dd_control Named list of data-driven options. If external data is to
 #' be used, "small_data" needs to be formatted as output from 
 #' \code{\link{simulate_data}}. If secondary data source is to be simulated, 
 #' need a list of parameters as from \code{\link{return_dgp_parameters}}. 
 #' @return Named list of prior means and variance-covariance matrices
 #' @export
-make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd"),
+make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd", 
+                                              "powerprior"),
                        dd_control = NULL) {
 
-  stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
+  stopifnot(prior_type %in% c("unit", "partial", "strict", "dd", "powerprior"))
   
   if (prior_type %in% c("unit", "partial", "strict")) {
     if (is.null(params)) {
@@ -423,7 +434,7 @@ make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd")
     names(prior[["beta"]][["mean"]])  <- names(params$beta)
     names(prior[["gamma"]][["mean"]]) <- names(params$gamma)
     
-  } else if (prior_type == "dd") {
+  } else if (prior_type %in% c("dd", "powerprior")) {
     
     if (is.null(dd_control)) {
       stop("Need to specify input data set or simulation parameters for dd")
@@ -445,15 +456,37 @@ make_prior <- function(params, prior_type = c("unit", "partial", "strict", "dd")
       
       # Defaults
       if (is.null(dd_control$partial_vague)) {
-        dd_control$partial_vague <- TRUE
+        if (prior_type == "dd") {
+          dd_control$partial_vague <- TRUE
+        } else if (prior_type == "powerprior") {
+          dd_control$partial_vague <- FALSE
+        } else {
+          stop("Unexpected logic")
+        }
       } 
       if (is.null(dd_control$inflate_factor)) {
-        dd_control$inflate_factor <- 100
+        if (prior_type == "dd") {
+          dd_control$inflate_factor <- 100
+        } else if (prior_type == "powerprior") {
+          dd_control$inflate_factor <- 1
+        } else {
+          stop("Unexpected logic")
+        }
       }
       
       prior <- make_dd_prior(small_data = dd_control$small_data, 
                              partial_vague = dd_control$partial_vague,
                              inflate_factor = dd_control$inflate_factor)
+      
+      # Also pass back small data set if doing power prior
+      # List format will be collapsed
+      if (prior_type == "powerprior") {
+        small_dl <- dd_control$small_data
+        small_dl$outcomes$u <- small_dl$df$u
+        small_dl$designs$x_m <- cbind(small_dl$designs$x_m, u = small_dl$df$u)
+        small_dl$designs$x_y <- cbind(small_dl$designs$x_y, u = small_dl$df$u)
+        prior$small_cdo <- collapse_do_list(do_list = small_dl)
+      }
     }
   }
   
