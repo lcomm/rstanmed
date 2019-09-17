@@ -545,6 +545,12 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
 #' @param n Number of observations in data set
 #' @param u_ei 0/1 flag for whether U should be exposure-induced
 #' @param am_intx 0/1 flag for exposure-mediator interaction in outcome model
+#' @param transport 0/1 flag for whether transportability holds. If this option
+#' is not \code{NULL}, then \code{yu_strength}, \code{mu_strength}, 
+#' \code{small_yu_strength}, and \code{small_mu_strength} will be set by
+#' \code{\link{convert_transport_to_strengths}}. Does not need to be set if
+#' \code{params} and \code{small_params} are set, or if the strengths are 
+#' directly passed in.
 #' @param yu_strength Log-OR of U in outcome model
 #' @param mu_strength Log-OR of U in mediator model
 #' @param params List of data generating parameters for big data set (will be 
@@ -561,14 +567,29 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
 #' @return Stan model fit object
 #' @export
 run_bdf_replicate <- function(n, u_ei, am_intx, 
-                              yu_strength, mu_strength, params = NULL,
-                              small_yu_strength, small_mu_strength, 
+                              transport = NULL,
+                              yu_strength = NULL, mu_strength = NULL, params = NULL,
+                              small_yu_strength = NULL, small_mu_strength = NULL, 
                               small_params = NULL, dd_control = NULL,
                               prior_type = "dd",
                               n_ratio = 10,
                               result_type = c("raw", "processed"),
                               ...) {
-  
+  # Make sure one parameter version is specified
+  if (is.null(transport)) {
+    if (is.null(params)) {
+      stopifnot(!is.null(yu_strength), !is.null(mu_strength))
+    }
+    if (is.null(small_params)) {
+      stopifnot(!is.null(small_yu_strength), !is.null(small_mu_strength))  
+    }
+  } else if (!is.null(transport) & is.null(params)) {
+    strengths <- convert_transport_to_strengths(transport)
+    yu_strength <- strengths[1]
+    mu_strength <- strengths[2]
+    small_yu_strength <- strengths[3]
+    small_mu_strength <- strengths[4]
+  }
   # Basic checks
   stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
   if (is.null(params)) {

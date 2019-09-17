@@ -83,6 +83,6 @@ bin_bin_sens_stan <- function(outcomes, designs, prior,
                                    am_intx = am_intx,
                                    mean_only = mean_only,
                                    w = cdo$w),
-                        ...)
+                         ...)
   return(out)
 }
