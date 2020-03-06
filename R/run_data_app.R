@@ -66,6 +66,159 @@ make_da_priors <- function(df, formulas, inf_fact = 1000) {
 
 
 
+#' Create a block matrix with diagonal repeats
+#'
+#' @param mat An RxC Matrix to repeat
+#' @param times Number of times to repeat
+#' @return A matrix with row and column counts Rxtimes rows and Cxtimes columns
+make_repeated_block_matrix <- function(mat, times) {
+  stopifnot(is.matrix(mat))
+  stopifnot(is.numeric(times))
+  return(kronecker(diag(times), mat))
+}
+
+
+
+#' Resize R matrix based on priors
+#'
+#' Make the R_mat matrix bigger with a block-identity, and/or through block
+#' repeats. Adding a block-identity will happen if it is detected that the 
+#' R matrix was missing a confounder (i.e., there is an unmeasured confounder),
+#' and the block repeats will happen if the length of elements in the informative
+#' prior suggests that the prior is actually on a coefficient matrix (i.e., the
+#' model is for a multinomial logistic model outcome).
+#' 
+#' @param R_mat R matrix from QR decomposition of design matrix for that model,
+#' with any rescaling already performed by \code{\link{resize_R}}
+#' @param model_label Name of submodel to scale. Must be in \code{unmeasured}, 
+#' \code{mediator}, or \code{outcome}.
+#' @param prior_list Named list, as made by \code{\link{make_da_priors}}.
+#' @return R matrix appropriate for pre- and most-multiplications
+resize_Rmat <- function(R_mat, model_label, prior_list) {
+  stopifnot(model_label %in% c("mediator", "unmeasured", "outcome"))
+  stopifnot("mean" %in% names(prior_list[[model_label]]))
+  stopifnot("vcov" %in% names(prior_list[[model_label]]))
+  stopifnot(is.matrix(R_mat))
+  stopifnot(dim(R_mat)[1] == dim(R_mat)[2])
+  dimR <- dim(R_mat)[1]
+  dimMean <- length(prior_list[[model_label]][["mean"]])
+  # At present, code not set up for multiple missing confounders
+  size_test <-c(dimMean %% dimR == 0, dimMean %% (dimR + 1) == 0)
+  stopifnot(any(size_test))
+  diffSize <- which(size_test) - 1
+  stopifnot(diffSize %in% c(0, 1)) # extra sanity check
+   
+  # Augment with ones if prior includes an extra variable
+  if (diffSize > 0) {
+    newR <- diag(dimR + diffSize)
+    newR[1:dimR, 1:dimR] <- R_mat
+    R_mat <- newR
+  }
+  
+  # Expand block-wise if necessary (i.e., for multicategory logit model)
+  if (dimMean > dimR + 1) {
+    n_block <- dimMean / (dimR + diffSize)
+    stopifnot(dimMean %% (dimR + diffSize) == 0)
+    R_mat <- make_repeated_block_matrix(mat = R_mat, times = n_block)
+  }
+  
+  return(R_mat)
+}
+
+
+
+#' Basic submodel-level QR decomposition and scaling
+#' 
+#' @param Xmat Design matrix
+#' @param scaling Scaling factor for Q (R multiplied by 1 / scaling)
+#' @return Named list of Qstar and Rstar matrices
+QR_to_scaled_list <- function(Xmat, scaling) {
+  res <- list(qr_res = qr(Xmat))
+  res$Qstar <- qr.Q(res$qr_res) * scaling
+  res$Rstar <- qr.R(res$qr_res) / scaling
+  return(res)
+}
+
+
+
+#' Apply QR decomposition to priors
+#' 
+#' Given an informative prior, adjust it based on the R (or, more like, R^*) 
+#' matrix from a QR decomposition. This allows the Stan sampling to be performed
+#' on the QR-scaled parameters because the informative prior is converted to the
+#' QR-scaled version. 
+#' 
+#' @param prior_list Named list, as made by \code{\link{make_da_priors}}.
+#' @param model_label Name of submodel to scale. Must be in \code{unmeasured}, 
+#' \code{mediator}, or \code{outcome}.
+#' @param R_mat R matrix from QR decomposition of design matrix for that model,
+#' with any rescaling already performed by \code{\link{resize_R}}
+#' @return \code{prior_list} list object with the \code{model_label} 
+#' informative prior translated to the QR scale
+QR_scale_submodel_prior <- function(prior_list, model_label, R_mat) {
+  
+  # Apply pre- and post-multiplications
+  prior_list[[model_label]][["mean"]] <- 
+    c(R_mat %*% prior_list[[model_label]][["mean"]])
+  prior_list[[model_label]][["vcov"]] <- 
+    c(R_mat %*% prior_list[[model_label]][["vcov"]] %*% t(R_mat))
+  
+  return(prior_list)
+}
+
+
+
+#' Do everything needed to apply a QR decomposition to the fit process
+#' 
+#' @param Xmat_M M matrix
+#' @param Xmat_U U matrix
+#' @param Xmat_Y Y matrix
+#' @param scaling Scaling determined by \code{scale_factor} input to 
+#' \code{\link{run_stan_BSA}}
+#' @param prior_list List of priors as made by \code{\link{make_da_priors}}
+#' @return Named list with Q, Rstar, Rstar_inv matrices and list of adjusted
+#' priors
+#' @export
+calculate_QR <- function(Xmat_M, Xmat_U, Xmat_Y, scaling, prior_list) {
+  
+  # Basic QR decomposition output list
+  res <- list(M = QR_to_scaled_list(Xmat = Xmat_M, scaling = scaling),
+              U = QR_to_scaled_list(Xmat = Xmat_U, scaling = scaling),
+              Y = QR_to_scaled_list(Xmat = Xmat_Y, scaling = scaling))
+  
+  # Resizing Rstar as needed
+  res[["M"]][["Rstar"]] <- resize_Rmat(res[["M"]][["Rstar"]], 
+                                       model_label = "mediator", 
+                                       prior_list = prior_list)
+  res[["U"]][["Rstar"]] <- resize_Rmat(res[["U"]][["Rstar"]], 
+                                       model_label = "unmeasured", 
+                                       prior_list = prior_list)
+  res[["Y"]][["Rstar"]] <- resize_Rmat(res[["Y"]][["Rstar"]], 
+                                       model_label = "outcome", 
+                                       prior_list = prior_list)
+  
+  # Inverting the resized Rstars
+  res[["M"]][["Rstar_inv"]] <- solve(res[["M"]][["Rstar"]])
+  res[["U"]][["Rstar_inv"]] <- solve(res[["U"]][["Rstar"]])
+  res[["Y"]][["Rstar_inv"]] <- solve(res[["Y"]][["Rstar"]])
+  
+  # Applying QR scaling to priors
+  res$priors <- prior_list
+  res$priors[["M"]] <- QR_scale_submodel_prior(prior_list = res$priors, 
+                                               model_label = "mediator", 
+                                               R_mat = res[["M"]][["Rstar"]])
+  res$priors[["U"]] <- QR_scale_submodel_prior(prior_list = res$priors, 
+                                               model_label = "unmeasured", 
+                                               R_mat = res[["U"]][["Rstar"]])
+  res$priors[["Y"]] <- QR_scale_submodel_prior(prior_list = res$priors, 
+                                               model_label = "outcome", 
+                                               R_mat = res[["Y"]][["Rstar"]])
+  return(res)
+}
+
+
+
+
 #' Function to run the Stan medBSA function
 #' 
 #' @param big_df Main data set for fitting the models
@@ -77,10 +230,18 @@ make_da_priors <- function(df, formulas, inf_fact = 1000) {
 #' @param formulas List of formulas
 #' @param am_intx Exposure-mediator interaction indicator
 #' @param inf_fact Inflation factor for making noninformative priors
+#' @param mean_only Whether the final step should just take the mean of Y
+#' @param scale_factor Scaling factor for QR decomposition. (Makes no difference
+#' with respect to the assumed model, just for computational advantage.)
 #' @return Stan model fit
 run_stan_BSA <- function(big_df, small_df, 
                          mediator, outcome, tx, unmeasured,
-                         formulas, am_intx, inf_fact = 100, ...){
+                         formulas, am_intx, inf_fact = 1,
+                         mean_only = 1, 
+                         scale_factor = "sqrt", 
+                         ...){
+  
+  scale_factor <- match.arg(scale_factor, choices = c("sqrt", "N", "1"))
   
   # Alias the unmeasured confounder, mediator, and outcome
   small_df[["Y"]] <- small_df[[outcome]]
@@ -88,6 +249,7 @@ run_stan_BSA <- function(big_df, small_df,
   small_df[["U"]] <- small_df[[unmeasured]]
   big_df[["Y"]]   <- big_df[[outcome]]
   big_df[["M"]]   <- big_df[[mediator]]
+  K_m <- length(unique(big_df$M))
   
   # Update formulas with shortcut outcome name and add U to other formulas
   formulas$u_noU      <- formulas$unmeasured
@@ -105,44 +267,51 @@ run_stan_BSA <- function(big_df, small_df,
   # Build design matrices
   # Build aggregation and weighting objects
   N_tot <- NROW(big_df)
-  cat(N_tot)
   big_df$w <- 1
   big_df <- aggregate(w ~ ., data = big_df, FUN = sum)
   big_df[["U"]] <- NA
   Xmat_M  <- model.matrix(formulas$mediator, big_df)
   Xmat_Y  <- model.matrix(formulas$outcome, big_df)
   Xmat_U  <- model.matrix(formulas$u_noU, big_df)
-  Xmat_bl <- model.matrix(formulas$baseline, big_df)
   N       <- nrow(Xmat_Y)
-  cat(" ")
-  cat(N)
   
   # Construct priors
   priors <- make_da_priors(small_df, formulas, inf_fact = inf_fact)
+  
+  # Perform QR decomposition and modify priors accordingly priors
+  scaling <- switch(scale_factor,
+                    "sqrt" = sqrt(N_tot - 1),
+                    "N" = N_tot,
+                    "1" = 1)
+  
+  qr_res <- calculate_QR(Xmat_M = Xmat_M, Xmat_U = Xmat_U, Xmat_Y = Xmat_Y, 
+                         scaling = scaling, prior_list = priors)
   
   # Make stan data list
   stan_data <- list(K_m = length(unique(big_df$M)),
                     D_m = ncol(Xmat_M) + 1,
                     D_y = ncol(Xmat_Y) + 1,
                     D_u = ncol(Xmat_U),
-                    D_bl = ncol(Xmat_bl),
                     N = N,
                     am_intx = am_intx,
-                    x_mu1 = cbind(Xmat_M, U = rep(1, N)),
-                    x_mu0 = cbind(Xmat_M, U = rep(0, N)),
-                    x_yu1 = cbind(Xmat_Y, U = rep(1, N)),
-                    x_yu0 = cbind(Xmat_Y, U = rep(0, N)),
-                    x_u = Xmat_U,
-                    x_bl = Xmat_bl,
-                    m_coef_u = priors$unmeasured[["mean"]],
-                    v_coef_u = priors$unmeasured[["vcov"]],
-                    m_coef_m = priors$mediator[["mean"]],
-                    v_coef_m = priors$mediator[["vcov"]],
-                    m_coef_y = priors$outcome[["mean"]],
-                    v_coef_y = priors$outcome[["vcov"]],
+                    x_mu1 = cbind(qr_res[["M"]][["Qstar"]], U = rep(1, N)),
+                    x_mu0 = cbind(qr_res[["M"]][["Qstar"]], U = rep(0, N)),
+                    x_yu1 = cbind(qr_res[["Y"]][["Qstar"]], U = rep(1, N)),
+                    x_yu0 = cbind(qr_res[["Y"]][["Qstar"]], U = rep(0, N)),
+                    x_u = qr_res[["U"]][["Qstar"]],
+                    m_coef_u = qr_res$priors$unmeasured[["mean"]],
+                    v_coef_u = qr_res$priors$unmeasured[["vcov"]],
+                    m_coef_m = qr_res$priors$mediator[["mean"]],
+                    v_coef_m = qr_res$priors$mediator[["vcov"]],
+                    m_coef_y = qr_res$priors$outcome[["mean"]],
+                    v_coef_y = qr_res$priors$outcome[["vcov"]],
                     m = big_df[[mediator]],
                     y = big_df[[outcome]],
-                    w = big_df[["w"]])
+                    w = big_df[["w"]],
+                    Rstar_inv_M = qr_res[["M"]][["Rstar_inv"]],
+                    Rstar_inv_Y = qr_res[["Y"]][["Rstar_inv"]],
+                    Rstar_inv_U = qr_res[["U"]][["Rstar_inv"]],
+                    mean_only = mean_only)
   
   # Run
   samples <- rstan::sampling(stanmodels$mediation_model_ncp, 
@@ -172,8 +341,8 @@ run_stan_BSA <- function(big_df, small_df,
 #' \dontrun{
 #' run_data_app(seer_file_path = "Data/Raw/data_SEER_for_BSA_summer_project.txt", 
 #'              cancors_file_path = "Data/Raw/selected_cancors_data_2016_3_14.csv",
-#'              save_file_path = paste0("data_app_res_",
-#'                                      format(Sys.Date(), "%Y%m%d"), ".rds"),
+#'              samples_file_path = paste0("data_app_res_",
+#'                                  format(Sys.Date(), "%Y%m%d"), ".rds"),
 #'              am_intx = 1, inf_fact = 100, chains = 4, iter = 2000, seed = 42,
 #'              auto_write = TRUE, mc.cores = 4)
 #' }
@@ -183,7 +352,8 @@ run_data_app <- function(seer_file_path,
                                                     format(Sys.Date(), "%Y%m%d"),
                                                     ".csv"),
                          am_intx = 1,
-                         inf_fact = 100,
+                         inf_fact = 1,
+                         scale_factor = "sqrt",
                          chains = 4, iter = 2000, seed = 42,
                          auto_write = TRUE, mc.cores = 4, ...) {
   
@@ -242,6 +412,7 @@ run_data_app <- function(seer_file_path,
                             chains = chains, iter = iter, seed = seed,
                             sample_file = samples_file_path,
                             cores = mc.cores,
+                            scale_factor = scale_factor,
                             ...)
   
   return(bayes_res)

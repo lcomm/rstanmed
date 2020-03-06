@@ -16,10 +16,6 @@ data {
     matrix[N, D_y] x_yu1;            // design matrix, Y model if U = 1
     matrix[N, D_y] x_yu0;            // design matrix, Y model if U = 0
     matrix[N, D_u] x_u;              // design matrix, U model
-    // R INVERSE MATRICES;
-    matrix[D_m*(K_m-1), D_m*(K_m-1)] Rstar_inv_M;
-    matrix[D_y, D_y] Rstar_inv_Y;
-    matrix[D_u, D_u] Rstar_inv_U;
     // REGRESSION PARAMETERS
     vector[D_u] m_coef_u;               // mean, coef_u prior
     cov_matrix[D_u] v_coef_u;           // vcov, coef_u prior
@@ -32,9 +28,8 @@ data {
     int<lower=0, upper=1> y[N];         // observations of outcome Y
     // WEIGHTS
     int w[N];                        // number of times data pattern is observed
-    // SIMULATION
-    int mean_only;
-    
+    // PRIOR
+    int<lower=0, upper=1> prior_only;
 }
 transformed data {
     row_vector[D_m] zs = rep_row_vector(0, D_m);
@@ -42,6 +37,7 @@ transformed data {
     matrix[D_y, D_y] alpha_L = cholesky_decompose(v_coef_y);
     matrix[D_u, D_u] gamma_L = cholesky_decompose(v_coef_u);
     int u_ei = 1;
+    int mean_only = 1;
     matrix[N, D_m - 1] x_m = x_mu1[, 1:(D_m - 1)];
     matrix[N, D_y - 1] x_y = x_yu1[, 1:(D_y - 1)];
     int N_tot = sum(w);
@@ -57,19 +53,15 @@ parameters {
     vector[(K_m - 1)*D_m] coef_m_raw_unscaled; // non-zero parameters
 }
 transformed parameters {
-    // coef_X is on QR-decomposed scale
-    // greek parameter versions are on original (interpretable) scale
     vector[D_y] coef_y = m_coef_y + alpha_L * coef_y_unscaled;
     vector[D_u] coef_u = m_coef_u + gamma_L * coef_u_unscaled;
     vector[(K_m - 1)*D_m] coef_m_raw_scaled = m_coef_m + 
                                               beta_L * coef_m_raw_unscaled;
     matrix[K_m, D_m] coef_m = append_row(zs, 
                               to_matrix(coef_m_raw_scaled, (K_m - 1), D_m, 1));
-    matrix[K_m, D_m] beta = append_row(zs, 
-                                       to_matrix(Rstar_inv_M * coef_m_raw_scaled, 
-                                                 (K_m - 1), D_m, 1));
-    vector[D_y] alpha = Rstar_inv_Y * coef_y;
-    vector[D_u] gamma = Rstar_inv_U * coef_u;
+    matrix[K_m, D_m] beta = coef_m;
+    vector[D_y] alpha = coef_y;
+    vector[D_u] gamma = coef_u;
 }
 model {
     /** Declarations **/
@@ -133,7 +125,10 @@ model {
     }
     
     // Add likelihood to target
-    target += dot_product(w_vec, ll_marg);
+    if (prior_only != 1) {
+      target += dot_product(w_vec, ll_marg);  
+    }
+    
     
     /** Priors **/
     coef_y_unscaled ~ normal(0, 1);

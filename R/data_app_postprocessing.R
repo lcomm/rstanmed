@@ -347,10 +347,10 @@ process_data_app_gf <- function(seer_file_path, stan_fit, am_intx) {
   
   # Extract coefficients from model
   coefs <- as.array(rstan::extract(stan_fit, 
-                                   pars = c("coef_y", "coef_m", "coef_u")))
-  coef_u_arr <- t(coefs$coef_u)
-  coef_m_arr <- aperm(coefs$coef_m, c(3, 2, 1)) # have last dimension be R
-  coef_y_arr <- t(coefs$coef_y)
+                                   pars = c("alpha", "beta", "gamma")))
+  coef_u_arr <- t(coefs$gamma)
+  coef_m_arr <- aperm(coefs$beta, c(3, 2, 1)) # have last dimension be R
+  coef_y_arr <- t(coefs$alpha)
   R <- dim(coef_u_arr)[2]
   
   # Initialize containers
