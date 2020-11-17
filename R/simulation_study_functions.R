@@ -161,7 +161,7 @@ calculate_dg_delta_factor <- function(df, covariate_df = NULL, mean = TRUE) {
   cov_df_a1$a <- 1
   
   delta <- predict(fit_u_with_m, newdata = cov_df_a1, type = "response") -
-           predict(fit_u_with_m, newdata = cov_df_a0, type = "response")
+    predict(fit_u_with_m, newdata = cov_df_a0, type = "response")
   
   if (mean) {
     delta <- mean(delta)
@@ -193,7 +193,7 @@ calculate_dg_gamma_factor <- function(df, covariate_df = NULL,
   
   # Fit model of Y as function of U, M, and confounders
   fit_y <- glm(y ~ 1 + z1 + z2 + a + m + u, data = df,
-                      family = binomial(link = "logit"))
+               family = binomial(link = "logit"))
   # U effect is not going to constant across levels of A, so evaluate at a = 0.5
   # m = 0 is reference level
   covariate_df$m <- 0
@@ -204,7 +204,7 @@ calculate_dg_gamma_factor <- function(df, covariate_df = NULL,
   cov_df_u1$u <- 1
   
   gam <- predict(fit_y, newdata = cov_df_u1, type = "response") -
-         predict(fit_y, newdata = cov_df_u0, type = "response")
+    predict(fit_y, newdata = cov_df_u0, type = "response")
   
   if (mean) {
     gam <- mean(gam)
@@ -353,7 +353,7 @@ run_intx_corr <- function(df, small_df, am_intx) {
   # Big data sample frequencies of covariate patterns
   cov_df <- expand.grid(z1 = 0:1, z2 = 0:1)
   cov_df$counts <- get_z1_z2_counts(df)
-
+  
   # Reference level for bias correction is u'
   # Set reference level as if U is a baseline confounder
   u_prime <- mean(df$u)
@@ -364,7 +364,7 @@ run_intx_corr <- function(df, small_df, am_intx) {
   fit_y <- glm(y ~ 1 + (z1 + z2 + a + m + u)^5, data = small_df, 
                family = binomial(link = "logit"))
   fit_u_cond <- glm(u ~ 1 + (z1 + z2 + a + m)^4, data = small_df, 
-                family = binomial(link = "logit")) # weird but correct
+                    family = binomial(link = "logit")) # weird but correct
   fit_u_marg <- glm(u ~ 1 + (z1 + z2)^2, data = small_df, 
                     family = binomial(link = "logit"))
   fit_m_cond <- glm(m ~ 1 + (z1 + z2 + a + u)^4, data = small_df, 
@@ -377,9 +377,9 @@ run_intx_corr <- function(df, small_df, am_intx) {
   for (m in 0:1) {
     for (u in 0:1) {
       ey1 <- predict(fit_y, newdata = cbind(cov_df, a = a, m = m, u = u), 
-                    type = "response")
+                     type = "response")
       ey2 <- predict(fit_y, newdata = cbind(cov_df, a = a_star, m = m, u = u), 
-                    type = "response")
+                     type = "response")
       qm3 <- predict(fit_m_marg, newdata = cbind(cov_df, a = a_star), 
                      type = "response")
       pm3 <- m * qm3 + (1 - m) * (1 - qm3)
@@ -396,10 +396,10 @@ run_intx_corr <- function(df, small_df, am_intx) {
                      type = "response")
       pu7 <- u * qu7 + (1 - u) * (1 - qu7)
       cov_df$B_nde <- cov_df$B_nde + 
-                      (ey1 * pu5 * pm3 
-                      - ey2 * pu6 * pm3
-                      - ey1 * pm4 * pu7 
-                      + ey2 * pm4 * pu7)
+        (ey1 * pu5 * pm3 
+         - ey2 * pu6 * pm3
+         - ey1 * pm4 * pu7 
+         + ey2 * pm4 * pu7)
     }
   }
   
@@ -446,19 +446,19 @@ run_intx_corr <- function(df, small_df, am_intx) {
 #' @return Named list of results
 #' @export
 run_frequentist_replicate <- function(n, u_ei, am_intx, 
-                              yu_strength, mu_strength, params = NULL,
-                              small_yu_strength, small_mu_strength, 
-                              small_params = NULL,
-                              result_type = c("raw", "processed"),
-                              n_ratio = 10,
-                              B = 500,
-                              ...) {
+                                      yu_strength, mu_strength, params = NULL,
+                                      small_yu_strength, small_mu_strength, 
+                                      small_params = NULL,
+                                      result_type = c("raw", "processed"),
+                                      n_ratio = 10,
+                                      B = 500,
+                                      ...) {
   
   # Basic checks
   if (is.null(params)) {
     params <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
   }
-
+  
   if (is.null(small_params)) {
     small_params <- return_dgp_parameters(u_ei, am_intx, 
                                           small_yu_strength, small_mu_strength)
@@ -487,7 +487,7 @@ run_frequentist_replicate <- function(n, u_ei, am_intx,
   nder_uc <- run_uncorrected(dl$df, am_intx = 0, mean = TRUE)
   nder_dg <- run_delta_gamma(dl$df, small_dl$df)
   nder_ix <- run_intx_corr(dl$df, small_dl$df, am_intx = am_intx)
-
+  
   ci_uc <- quantile(replicate(B, run_uncorrected(boot_samp(dl$df), 
                                                  am_intx = am_intx, 
                                                  mean = TRUE)),
@@ -586,11 +586,12 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
   
   # Prior 
   #TODO(LCOMM): implement dd_control as function argument better
+  #TODO(LCOMM): default to prior variance inflation later
   if (is.null(dd_control)) {
     dd_control = list(small_n = floor(n / n_ratio), 
                       params = small_params,
                       partial_vague = TRUE,
-                      inflate_factor = 100)
+                      inflate_factor = 1)
   } else {
     if (!("small_n" %in% names(dd_control))) {
       dd_control$small_n <- floor(n / n_ratio)
@@ -602,11 +603,7 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
       dd_control$partial_vague <- TRUE
     }
     if (!("inflate_factor" %in% names(dd_control))) {
-      if (dd_control$partial_vague) {
-        dd_control$inflate_factor <- 100  
-      } else {
-        dd_control$inflate_factor <- 1
-      }
+      dd_control$inflate_factor <- 10
     }
   }
   prior <- make_prior(params = small_params, prior_type = "dd",
@@ -652,4 +649,114 @@ run_bdf_replicate <- function(n, u_ei, am_intx,
   }
 }
 
+
+#' Run a single replicate for inflation factor sensitivity analysis
+#' 
+#' @param n Number of observations in data set
+#' @param u_ei 0/1 flag for whether U should be exposure-induced
+#' @param am_intx 0/1 flag for exposure-mediator interaction in outcome model
+#' (will be created by \code{\link{return_dgp_parameters}} if not specified)
+#' @param yu_strength Log-OR of U in outcome model
+#' @param mu_strength Log-OR of U in mediator model
+#' @param inflate_factor Inflation factor for data driven prior
+#' @param tviol Type of transportability violation, beyond mu or yu mismatch 
+#' 0 = none
+#' 1 = alpha_a and beta_a are zeroed out in small data
+#' 2 = alpha_a, alpha_am, and beta_a are zeroed out in small data ***
+#' 3 = alpha_a, alpha_am, and beta_a are zeroed out in small data and yu, mu
+#' are zero in small data set (nonrecoverable violation!) *** 
+#' @param result_type Whether to return full object ("raw") or only selected
+#' information about NDER
+#' @param n_ratio For prior_type = "dd", ratio of big:small sample sizes
+#' @param ... Additional parameters to be passed to bin_bin_sens_stan
+#' @return Stan model fit object
+#' @export
+run_bdf_replicate_tviol <- function(n, u_ei, am_intx, 
+                                    inflate_factor = 1,
+                                    yu_strength = 1.5,
+                                    mu_strength = 1.5,
+                                    tviol = 0,
+                                    n_ratio = 10,
+                                    result_type = c("raw", "processed"),
+                                    ...) {
+  
+  # Basic checks
+  # stopifnot(prior_type %in% c("unit", "partial", "strict", "dd"))
+  params <- return_dgp_parameters(u_ei, am_intx, yu_strength, mu_strength)
+  stopifnot(tviol %in% c(0,1,2,3))
+  if (tviol == 3) {
+    #make nonrecoverable error
+    small_params <- return_dgp_parameters(u_ei, am_intx, 
+                                          yu_strength = 0, 
+                                          mu_strength = 0)  
+  } else {
+    small_params <- params
+  }
+  if (tviol %in% c(1, 2, 3)) {
+    small_params$alpha["a"] <- 0
+    small_params$beta["a"]  <- 0
+    
+    if (tviol*am_intx %in% c(2, 3)) {
+      small_params$alpha["a:m"] <- 0
+    }
+  }
+  params$prior <- "dd"
+  
+  # Simulate data
+  dl <- simulate_data(n = n, params = params)
+  
+  # Prior 
+  #TODO(LCOMM): implement dd_control as function argument better
+  #TODO(LCOMM): default to prior variance inflation later
+  dd_control = list(small_n = floor(n / n_ratio), 
+                    params = small_params,
+                    partial_vague = TRUE,
+                    inflate_factor = inflate_factor)
+  prior <- make_prior(params = small_params, prior_type = "dd",
+                      dd_control = dd_control)
+  
+  # Run Stan model and return fit
+  sf <- bin_bin_sens_stan(dl$outcomes, dl$designs, prior, u_ei, am_intx, ...)
+  res <- list(stan_fit = sf, params = params, data_list = dl)
+  truth_nder <- calculate_nder(params = params,
+                               u_ei = u_ei, am_intx = am_intx,
+                               mean = TRUE)
+  small_truth_nder <- calculate_nder(params = small_params,
+                               u_ei = u_ei, am_intx = am_intx,
+                               mean = TRUE)
+  
+  # Post-process
+  gc <- extract_nder_gcomp(res$stan_fit)
+  gf <- extract_nder_gform(res$stan_fit, dl$df, u_ei = u_ei, am_intx = am_intx)
+  nder_gc <- gc[1]
+  nder_gf <- gf[1]
+  ci_gc <- gc[2:3]
+  ci_gf <- gf[2:3]
+  cov_gc  <- check_coverage(ci = ci_gc, truth = truth_nder)
+  cov_gf  <- check_coverage(ci = ci_gf, truth = truth_nder)
+  width_gc <- get_ci_width(ci_gc)
+  width_gf <- get_ci_width(ci_gf)
+  
+  if (result_type == "raw") {
+    return(list(stan_fit = sf, params = params, data_list = dl,
+                truth_nder = truth_nder, 
+                small_truth_nder = small_truth_nder, 
+                estimate = c(gc = nder_gc, gf = nder_gf),
+                bias = c(gc = nder_gc - truth_nder,
+                         gf = nder_gf - truth_nder),
+                ci = c(gc = ci_gc, gf = ci_gf),
+                ci_cov = c(gc = cov_gc, gf = cov_gf),
+                ci_width = c(gc = width_gc, gf = width_gf)))
+    
+  } else {
+    return(list(truth_nder = truth_nder, 
+                small_truth_nder = small_truth_nder, 
+                estimate = c(gc = nder_gc, gf = nder_gf),
+                bias = c(gc = nder_gc - truth_nder,
+                         gf = nder_gf - truth_nder),
+                ci = c(gc = ci_gc, gf = ci_gf),
+                ci_cov = c(gc = cov_gc, gf = cov_gf),
+                ci_width = c(gc = width_gc, gf = width_gf)))
+  }
+}
 

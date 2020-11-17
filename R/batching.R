@@ -231,6 +231,42 @@ make_simregdf_shell <- function(registry, registry_type = c("freq", "bdf")) {
 
 
 
+
+#' Make a shell data frame to contain job parameters from registry output
+#' (inflation factor registry version)
+#' 
+#' @param registry Batchtools registry containing jobs
+#' @param registry_type Whether registry has frequentist ("freq") or Bayesian ("bdf")
+#' results
+#' @return Data frame containing job parameters and empty columns for results
+#' @export
+make_simregdf_shell_tviol <- function(registry, registry_type = c("freq", "bdf")) {
+  job_parl <- getJobPars(reg = registry)$job.pars
+  if (registry_type == "bdf") {
+    df <- data.frame(job_id = getJobPars(reg = registry)$job.id,
+                     seed = sapply(job_parl, function(x) x$seed),
+                     u_ei = sapply(job_parl, function(x) x$u_ei),
+                     am_intx = sapply(job_parl, function(x) x$am_intx),
+                     n = sapply(job_parl, function(x) x$n),
+                     n_ratio = sapply(job_parl, function(x) x$n_ratio),
+                     tviol = sapply(job_parl, function(x) x$tviol),
+                     inflate_factor = sapply(job_parl, function(x) x$inflate_factor),
+                     nder_truth = NA,
+                     nder_gc = NA,
+                     nder_gf = NA,
+                     bias_gc = NA,
+                     bias_gf = NA,
+                     ci_cov_gc = NA,
+                     ci_cov_gf = NA,
+                     ci_width_gc = NA,
+                     ci_width_gf = NA)
+  } else {
+    stop("Unknown registry type!")
+  }
+  return(df)
+}
+
+
 #' Process registry of frequentist results
 #' 
 #' @param registry Registry containing jobs
@@ -291,6 +327,36 @@ combine_bdf_reg_results <- function(registry) {
   return(shell)
 }
 
+
+#' Process registry of Bayesian Data Fusion results for inflation factors
+#' and transportability violations
+#' 
+#' @param registry Registry containing jobs
+#' @return Data frame containing parameter conditions and results
+#' @export
+combine_tviol_reg_results <- function(registry) {
+  shell <- make_simregdf_shell_tviol(registry = registry, registry_type = "bdf")
+  for (i in 1:NROW(shell)) {
+    rdsname <- paste0(path.expand(registry$file.dir), "/results/", i, ".rds")
+    is_done <- (!is.na(getJobStatus(ids = i, reg = registry)$done)) && 
+      (file.exists(rdsname))
+    if (is_done) {
+      job_res <- batchtools::loadResult(id = i, reg = registry)
+      shell[i, "nder_truth"] <- job_res$truth_nder
+      for (suffix in c("gc", "gf")) {
+        estimate_name <- paste0("nder_", suffix)
+        bias_name     <- paste0("bias_", suffix)
+        cov_name      <- paste0("ci_cov_", suffix)
+        width_name    <- paste0("ci_width_", suffix)
+        shell[i, estimate_name] <- job_res$estimate[[suffix]]
+        shell[i, bias_name]     <- job_res$bias[[suffix]]
+        shell[i, cov_name]      <- job_res$ci_cov[[suffix]]
+        shell[i, width_name]    <- job_res$ci_width[[suffix]]
+      }
+    }
+  }
+  return(shell)
+}
 
 
 #' Process simulation results in a batchtools registry and save combined file
