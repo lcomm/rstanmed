@@ -12,6 +12,9 @@
 #' @import rstantools
 #' @import matrixStats
 #' @import batchtools
+#' @import ggplot2
+#' @importFrom utils read.csv read.table
+#' @importFrom grDevices grey.colors
 #'
 #' @description stuff
 NULL
